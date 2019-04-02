@@ -43,9 +43,15 @@
          </attribute>
          <layout class="QHBoxLayout" name="horizontalLayout_3">
           <item>
-           <layout class="QHBoxLayout" name="horizontalLayout">
+           <layout class="QHBoxLayout" name="horizontallayout_2d">
             <item>
              <widget class="QFrame" name="frame_2">
+              <property name="minimumSize">
+               <size>
+                <width>450</width>
+                <height>0</height>
+               </size>
+              </property>
               <property name="maximumSize">
                <size>
                 <width>450</width>
@@ -109,6 +115,9 @@
                        <property name="text">
                         <string>FD: </string>
                        </property>
+                       <property name="wordWrap">
+                        <bool>true</bool>
+                       </property>
                       </widget>
                      </item>
                     </layout>
@@ -146,6 +155,9 @@
                       <widget class="QLabel" name="lbl_filterfile">
                        <property name="text">
                         <string>File:</string>
+                       </property>
+                       <property name="wordWrap">
+                        <bool>true</bool>
                        </property>
                       </widget>
                      </item>
@@ -276,6 +288,12 @@
            <layout class="QHBoxLayout" name="horizontallayout_emg">
             <item>
              <widget class="QFrame" name="frame">
+              <property name="minimumSize">
+               <size>
+                <width>450</width>
+                <height>0</height>
+               </size>
+              </property>
               <property name="maximumSize">
                <size>
                 <width>450</width>

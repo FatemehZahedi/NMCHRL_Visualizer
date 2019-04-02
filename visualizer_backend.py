@@ -1,9 +1,11 @@
 #!/usr/bin/python3
 
 from PyQt5 import QtWidgets, uic, QtCore
-from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QPushButton, QButtonGroup
+from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget,
+                            QPushButton, QButtonGroup, QFileDialog)
 from PyQt5.QtCore import QObject
 
+import os
 import sys
 import pyqtgraph as pg
 import socket
@@ -14,9 +16,140 @@ from collections import deque
 
 class TwoDimensionPlot:
 
-    def __init__(self, widget_list):
-        for i in widget_list:
-            print(i, widget_list[i])
+    _filterCoeffs = {
+                    'nofilter': [np.array([1]),np.array([1])],
+                    'defaultfilter': [np.array([1,2]),np.array([3,4,5])],
+                    'customfilter': [np.array([1]),np.array([1])]
+                    }
+
+    def __init__(self, widget_dict):
+        self._uiwidgets = widget_dict
+        self.Init2DPlot()
+        self.Init2DButtons()
+
+    def Init2DPlot(self):
+        pg.setConfigOption('background', 'w')
+        pg.setConfigOption('foreground', 'k')
+        xAxisItem = pg.AxisItem(orientation='bottom', showValues=True)
+        yAxisItem = pg.AxisItem(orientation='left', showValues=True)
+        plotWidget = pg.GraphicsLayoutWidget()
+        plt = plotWidget.addPlot(row=0,
+                                 col=0,
+                                 rowspan=1,
+                                 colspan=1,
+                                 axisItems={'left': yAxisItem,
+                                            'bottom': xAxisItem})
+        plt.setRange(xRange=(-1,1), yRange=(-1,1), padding=0.0)
+        plt.show()
+        self._uiwidgets['horizontallayout_2d'].addWidget(plotWidget)
+        self._uiwidgets['plot2d'] = plt
+
+    def Init2DButtons(self):
+        # Connect Pushbutton Clicked Signals to Slots
+        self._uiwidgets['btn_selectshmfile'].clicked.connect(self.SelectShmFile)
+        self._uiwidgets['btn_connect2ddata'].clicked.connect(self.Connect2DData)
+        self._uiwidgets['btn_selectfilterfile'].clicked.connect(self.SelectFilterFile)
+        self._uiwidgets['btn_2dplotstart'].clicked.connect(self.Start2DPlot)
+        self._uiwidgets['btn_2dplotstop'].clicked.connect(self.Stop2DPlot)
+
+        # Create radiobutton group for filters and add buttons
+        self.rbtngroup_filter = QButtonGroup()
+        self.rbtngroup_filter.addButton(self._uiwidgets['rbtn_nofilter'])
+        self.rbtngroup_filter.addButton(self._uiwidgets['rbtn_defaultfilter'])
+        self.rbtngroup_filter.addButton(self._uiwidgets['rbtn_customfilter'])
+
+        # Connect radiobutton clicked signal to slot and set 'No Filter' as default button
+        self.rbtngroup_filter.buttonClicked.connect(self.Set2DDataFilter)
+        self._uiwidgets['rbtn_nofilter'].setChecked(True)
+        self._uiwidgets['rbtn_nofilter'].click()
+
+
+    def SelectShmFile(self):
+        #Open filedialog box
+        options = QFileDialog.Options()
+        options |= QFileDialog.DontUseNativeDialog
+        filename, _ = QFileDialog.getOpenFileName(directory=os.getcwd(), options=options)
+        self._shmfile = filename
+        self._uiwidgets['lbl_shmfile'].setText("FD: {}".format(self._shmfile))
+
+    def Connect2DData(self):
+        key = sysv_ipc.ftok(filepath, 255)
+        shm = sysv_ipc.SharedMemory(key)
+
+
+
+    def SelectFilterFile(self):
+        #Open filedialog box
+        options = QFileDialog.Options()
+        options |= QFileDialog.DontUseNativeDialog
+        filename, _ = QFileDialog.getOpenFileName(directory=os.getcwd(), options=options)
+
+        # Check if choosen item is a file, exit if not a file
+        if (not os.path.isfile(filename)):
+            if (len(filename) == 0):
+                msg = "File: "
+            else:
+                msg = "File: Choosen Item Not a File"
+            self._uiwidgets['lbl_filterfile'].setText(msg)
+            return
+
+        # Check that file has exactly 2 lines
+        with open(filename) as f:
+            for i,l in enumerate(f):
+                pass
+        linecount = i + 1
+        if (linecount != 2):
+            msg = "Error: File Did Not Contain Exactly 2 Lines"
+            self._uiwidgets['lbl_filterfile'].setText(msg)
+            return
+
+        # Get coefficients
+        temp = []
+        f = open(filename)
+        for line in f:
+            coeffs = np.fromstring(line,sep=',')
+            if (len(coeffs) == 0):
+                msg = "Import Error: Check Butterworth Coefficient File"
+                self._uiwidgets['lbl_filterfile'].setText(msg)
+                f.close()
+                return
+            temp.append(coeffs)
+
+        # Set coefficients, lbls
+        self._filterfile = filename
+        [dir, fname] = os.path.split(filename)
+        self._filterCoeffs['customfilter'] = temp
+
+        self._uiwidgets['lbl_filterfile'].setText("File: {}".format(fname))
+        self._uiwidgets['rbtn_customfilter'].setChecked(True)
+        self._uiwidgets['rbtn_customfilter'].click()
+
+    def SetButterworthCoeffsLabel(self, filterStr):
+        coeffs = self._filterCoeffs[filterStr]
+        numCoeffs = coeffs[0]
+        denCoeffs = coeffs[1]
+        msg = "Numerator:   {}\nDenominator: {}".format(numCoeffs, denCoeffs)
+
+        self._uiwidgets['lbl_buttercoefficients'].setText(msg)
+
+    def Start2DPlot(self):
+        pass
+
+    def Stop2DPlot(self):
+        pass
+
+    def Set2DDataFilter(self, rbtn):
+        btnname = rbtn.text()
+        if (btnname == "No Filter"):
+            filterStr = 'nofilter'
+        elif (btnname == "Default"):
+            filterStr = 'defaultfilter'
+        elif (btnname == "Custom"):
+            filterStr = 'customfilter'
+
+        self.SetButterworthCoeffsLabel(filterStr)
+
+
 
 class EmgClient:
 
@@ -57,6 +190,7 @@ class EmgClient:
         temp = np.zeros(16)
         for i in range(0,5000):
             self._emgDataQueue.append(temp)
+
 
     def __del__(self):
         self.CloseSockets()
@@ -185,9 +319,10 @@ class MainWindow(QMainWindow):
                        self.rbtn_customfilter.objectName(): self.rbtn_customfilter,
                        self.lbl_buttercoefficients.objectName(): self.lbl_buttercoefficients,
                        self.btn_2dplotstart.objectName(): self.btn_2dplotstart,
-                       self.btn_2dplotstop.objectName(): self.btn_2dplotstop
+                       self.btn_2dplotstop.objectName(): self.btn_2dplotstop,
+                       self.horizontallayout_2d.objectName(): self.horizontallayout_2d
                        }
-        TwoDimensionPlot(widget_list)
+        self._TwoDimWidget = TwoDimensionPlot(widget_list)
 
     def InitializeEmgTab(self):
         self._emgClient = EmgClient(self.lineedit_ipaddress,
