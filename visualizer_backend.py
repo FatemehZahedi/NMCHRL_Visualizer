@@ -21,6 +21,11 @@ class TwoDimensionPlot:
                     'defaultfilter': [np.array([1,2]),np.array([3,4,5])],
                     'customfilter': [np.array([1]),np.array([1])]
                     }
+    _shmFile = None
+    _shmKey = None
+
+    _coordinatesUnfiltered = np.zeros((2,11))
+    _coordinatesFiltered = np.zeros((2,11))
 
     def __init__(self, widget_dict):
         self._uiwidgets = widget_dict
@@ -47,7 +52,7 @@ class TwoDimensionPlot:
     def Init2DButtons(self):
         # Connect Pushbutton Clicked Signals to Slots
         self._uiwidgets['btn_selectshmfile'].clicked.connect(self.SelectShmFile)
-        self._uiwidgets['btn_connect2ddata'].clicked.connect(self.Connect2DData)
+        self._uiwidgets['btn_connect2ddata'].clicked.connect(self.ConnectSharedMemory)
         self._uiwidgets['btn_selectfilterfile'].clicked.connect(self.SelectFilterFile)
         self._uiwidgets['btn_2dplotstart'].clicked.connect(self.Start2DPlot)
         self._uiwidgets['btn_2dplotstop'].clicked.connect(self.Stop2DPlot)
@@ -63,19 +68,69 @@ class TwoDimensionPlot:
         self._uiwidgets['rbtn_nofilter'].setChecked(True)
         self._uiwidgets['rbtn_nofilter'].click()
 
+        # Create radiobutton group for shm data io data types
+        self.rbtngroup_datatype = QButtonGroup()
+        self.rbtngroup_datatype.addButton(self._uiwidgets['rbtn_int32_t'])
+        self.rbtngroup_datatype.addButton(self._uiwidgets['rbtn_uint32_t'])
+        self.rbtngroup_datatype.addButton(self._uiwidgets['rbtn_int64_t'])
+        self.rbtngroup_datatype.addButton(self._uiwidgets['rbtn_uint64_t'])
+        self.rbtngroup_datatype.addButton(self._uiwidgets['rbtn_float32'])
+        self.rbtngroup_datatype.addButton(self._uiwidgets['rbtn_float64'])
+
+        # Connect radiobutton clicked signal to slot and set 'No Filter' as default button
+        self.rbtngroup_datatype.buttonClicked.connect(self.SetDataType)
+        self._uiwidgets['rbtn_float32'].setChecked(True)
+        self._uiwidgets['rbtn_float32'].click()
+
+    def SetDataType(self, rbtn):
+        btnname = rbtn.objectName()
+        if (btnname == "rbtn_int32_t"):
+            self._dataType = np.intc
+            self._dataTypeBytes = 4 #bytes
+        elif (btnname == "rbtn_uint32_t"):
+            self._dataType = np.uintc
+            self._dataTypeBytes = 4 #bytes
+        elif (btnname == "rbtn_int64_t"):
+            self._dataType = np.int_
+            self._dataTypeBytes = 8 #bytes
+        elif (btnname == "rbtn_uint64_t"):
+            self._dataType = np.uint
+            self._dataTypeBytes = 8 #bytes
+        elif (btnname == "rbtn_float32"):
+            self._dataType = np.single
+            self._dataTypeBytes = 4 #bytes
+        elif (btnname == "rbtn_float64"):
+            self._dataType = np.double
+            self._dataTypeBytes = 8 #bytes
 
     def SelectShmFile(self):
         #Open filedialog box
         options = QFileDialog.Options()
         options |= QFileDialog.DontUseNativeDialog
         filename, _ = QFileDialog.getOpenFileName(directory=os.getcwd(), options=options)
-        self._shmfile = filename
-        self._uiwidgets['lbl_shmfile'].setText("FD: {}".format(self._shmfile))
+        self._shmFile = filename
+        self._uiwidgets['lbl_shmfile'].setText("FD: {}".format(self._shmFile))
 
     def Connect2DData(self):
-        key = sysv_ipc.ftok(filepath, 255)
-        shm = sysv_ipc.SharedMemory(key)
+        pass
 
+    def ConnectSharedMemory(self):
+        if (self._shmFile == None):
+            msg = "Status: FD Not Chosen, Can't Connect"
+            self._uiwidgets['lbl_statusshmstream'].setText(msg)
+            return
+        self._shmKey = sysv_ipc.ftok(self._shmFile, 255)
+        self._shm = sysv_ipc.SharedMemory(self._shmKey, sysv_ipc.IPC_CREX)
+
+    def ReadSharedMemory(self):
+        nFloats = 2     #x and y coordinate
+        sizeofFloat = 4 #bytes/single precision float
+        coordinates_bytes = self._shm.read(nFloats*sizeofFloat)
+        coordinates_temp = np.frombuffer(coordinates_bytes)
+
+
+    def DisconnectSharedMemory(self):
+        sysv_ipc.remove_shared_memory(self._shm.id)
 
 
     def SelectFilterFile(self):
@@ -113,6 +168,11 @@ class TwoDimensionPlot:
                 self._uiwidgets['lbl_filterfile'].setText(msg)
                 f.close()
                 return
+            elif (len(coeffs) > 11):
+                msg = "Import Error: Inputted Filter Greater Than 10th Order"
+                self._uiwidgets['lbl_filterfile'].setText(msg)
+                f.close()
+                return
             temp.append(coeffs)
 
         # Set coefficients, lbls
@@ -139,6 +199,7 @@ class TwoDimensionPlot:
         pass
 
     def Set2DDataFilter(self, rbtn):
+        # Change Butterworth Coefficient Labels
         btnname = rbtn.text()
         if (btnname == "No Filter"):
             filterStr = 'nofilter'
@@ -146,9 +207,10 @@ class TwoDimensionPlot:
             filterStr = 'defaultfilter'
         elif (btnname == "Custom"):
             filterStr = 'customfilter'
-
         self.SetButterworthCoeffsLabel(filterStr)
 
+        # Set filter
+        self._filter = self._filterCoeffs[filterStr]
 
 
 class EmgClient:
@@ -320,7 +382,13 @@ class MainWindow(QMainWindow):
                        self.lbl_buttercoefficients.objectName(): self.lbl_buttercoefficients,
                        self.btn_2dplotstart.objectName(): self.btn_2dplotstart,
                        self.btn_2dplotstop.objectName(): self.btn_2dplotstop,
-                       self.horizontallayout_2d.objectName(): self.horizontallayout_2d
+                       self.horizontallayout_2d.objectName(): self.horizontallayout_2d,
+                       self.rbtn_int32_t.objectName(): self.rbtn_int32_t,
+                       self.rbtn_uint32_t.objectName(): self.rbtn_uint32_t,
+                       self.rbtn_int64_t.objectName(): self.rbtn_int64_t,
+                       self.rbtn_uint64_t.objectName(): self.rbtn_uint64_t,
+                       self.rbtn_float32.objectName(): self.rbtn_float32,
+                       self.rbtn_float64.objectName(): self.rbtn_float64
                        }
         self._TwoDimWidget = TwoDimensionPlot(widget_list)
 
