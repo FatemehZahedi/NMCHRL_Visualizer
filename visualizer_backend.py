@@ -124,9 +124,27 @@ class TwoDimensionPlot:
 
     def ReadSharedMemory(self):
         nFloats = 2     #x and y coordinate
-        sizeofFloat = 4 #bytes/single precision float
-        coordinates_bytes = self._shm.read(nFloats*sizeofFloat)
+        coordinates_bytes = self._shm.read(nFloats*self._dataTypeBytes)
         coordinates_temp = np.frombuffer(coordinates_bytes)
+
+    def ProcessNewData(self, newUnfilteredData):
+        # This function makes space for the new data in the unfiltered and filtered
+        # data arrays, inserted the unfiltered data into the unfiltered array, and
+        # applies a Butterworth filter to the data, which is then inserted into the
+        # filtered array.  The unfiltered and filtered data arrays are 2x11.
+        # The x data is in coordinates[0,:] row, the y data is in the coordinates[1,:] row
+
+        # Shift rows on unfiltered and filtered data arrays to make room for new data
+        self._coordinatesUnfiltered[:,1:] = self._coordinatesUnfiltered[:, 0:-1]
+        self._coordinatesFiltered[:,1:] = self._coordinatesFiltered[:,0:-1]
+
+        # Inserted new unfilterd data
+        self._coordinatesUnfiltered[:,0] = newUnfilteredData
+
+        # Apply Butterworth filter
+        b = self._filter[0] # numerator coefficients
+        a = self._filter[1] # denominator coefficients
+        self._coordinatesFiltered[0,0] = b.dot(self._coordinatesUnfiltered[0,0:len(b)])
 
 
     def DisconnectSharedMemory(self):
