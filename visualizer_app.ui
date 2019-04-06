@@ -48,13 +48,13 @@
              <widget class="QFrame" name="frame_2">
               <property name="minimumSize">
                <size>
-                <width>475</width>
+                <width>400</width>
                 <height>0</height>
                </size>
               </property>
               <property name="maximumSize">
                <size>
-                <width>475</width>
+                <width>400</width>
                 <height>16777215</height>
                </size>
               </property>
@@ -79,6 +79,11 @@
                       <height>16777215</height>
                      </size>
                     </property>
+                    <property name="font">
+                     <font>
+                      <pointsize>9</pointsize>
+                     </font>
+                    </property>
                     <property name="text">
                      <string>Connect</string>
                     </property>
@@ -86,6 +91,11 @@
                   </item>
                   <item row="2" column="1">
                    <widget class="QLabel" name="lbl_statusshmstream">
+                    <property name="font">
+                     <font>
+                      <pointsize>9</pointsize>
+                     </font>
+                    </property>
                     <property name="text">
                      <string>Status: Disconnected</string>
                     </property>
@@ -105,6 +115,11 @@
                          <height>16777215</height>
                         </size>
                        </property>
+                       <property name="font">
+                        <font>
+                         <pointsize>9</pointsize>
+                        </font>
+                       </property>
                        <property name="text">
                         <string>Choose</string>
                        </property>
@@ -112,6 +127,11 @@
                      </item>
                      <item>
                       <widget class="QLabel" name="lbl_shmfile">
+                       <property name="font">
+                        <font>
+                         <pointsize>9</pointsize>
+                        </font>
+                       </property>
                        <property name="text">
                         <string>FD: </string>
                        </property>
@@ -131,6 +151,11 @@
                     <layout class="QGridLayout" name="gridLayout_8">
                      <item row="0" column="0">
                       <widget class="QRadioButton" name="rbtn_float32">
+                       <property name="font">
+                        <font>
+                         <pointsize>9</pointsize>
+                        </font>
+                       </property>
                        <property name="text">
                         <string>Single Precision Float</string>
                        </property>
@@ -138,6 +163,11 @@
                      </item>
                      <item row="0" column="1">
                       <widget class="QRadioButton" name="rbtn_float64">
+                       <property name="font">
+                        <font>
+                         <pointsize>9</pointsize>
+                        </font>
+                       </property>
                        <property name="text">
                         <string>Double Precision Float</string>
                        </property>
@@ -145,6 +175,11 @@
                      </item>
                      <item row="1" column="0">
                       <widget class="QRadioButton" name="rbtn_uint32_t">
+                       <property name="font">
+                        <font>
+                         <pointsize>9</pointsize>
+                        </font>
+                       </property>
                        <property name="text">
                         <string>Unsigned Integer 32 Bits</string>
                        </property>
@@ -152,6 +187,11 @@
                      </item>
                      <item row="1" column="1">
                       <widget class="QRadioButton" name="rbtn_uint64_t">
+                       <property name="font">
+                        <font>
+                         <pointsize>9</pointsize>
+                        </font>
+                       </property>
                        <property name="text">
                         <string>Unsigned Integer 64 Bits</string>
                        </property>
@@ -159,6 +199,11 @@
                      </item>
                      <item row="2" column="1">
                       <widget class="QRadioButton" name="rbtn_int64_t">
+                       <property name="font">
+                        <font>
+                         <pointsize>9</pointsize>
+                        </font>
+                       </property>
                        <property name="text">
                         <string>Signed Integer 64 Bits</string>
                        </property>
@@ -166,6 +211,11 @@
                      </item>
                      <item row="2" column="0">
                       <widget class="QRadioButton" name="rbtn_int32_t">
+                       <property name="font">
+                        <font>
+                         <pointsize>9</pointsize>
+                        </font>
+                       </property>
                        <property name="text">
                         <string>Signed Integer 32 Bits</string>
                        </property>
@@ -197,6 +247,11 @@
                          <height>16777215</height>
                         </size>
                        </property>
+                       <property name="font">
+                        <font>
+                         <pointsize>9</pointsize>
+                        </font>
+                       </property>
                        <property name="text">
                         <string>Choose</string>
                        </property>
@@ -204,6 +259,11 @@
                      </item>
                      <item>
                       <widget class="QLabel" name="lbl_filterfile">
+                       <property name="font">
+                        <font>
+                         <pointsize>9</pointsize>
+                        </font>
+                       </property>
                        <property name="text">
                         <string>File:</string>
                        </property>
@@ -229,6 +289,11 @@
                          <height>16777215</height>
                         </size>
                        </property>
+                       <property name="font">
+                        <font>
+                         <pointsize>9</pointsize>
+                        </font>
+                       </property>
                        <property name="text">
                         <string>Default</string>
                        </property>
@@ -241,6 +306,11 @@
                          <width>100</width>
                          <height>16777215</height>
                         </size>
+                       </property>
+                       <property name="font">
+                        <font>
+                         <pointsize>9</pointsize>
+                        </font>
                        </property>
                        <property name="text">
                         <string>No Filter</string>
@@ -255,6 +325,11 @@
                          <height>16777215</height>
                         </size>
                        </property>
+                       <property name="font">
+                        <font>
+                         <pointsize>9</pointsize>
+                        </font>
+                       </property>
                        <property name="text">
                         <string>Custom</string>
                        </property>
@@ -262,6 +337,11 @@
                      </item>
                      <item row="1" column="1" rowspan="4">
                       <widget class="QLabel" name="lbl_buttercoefficients">
+                       <property name="font">
+                        <font>
+                         <pointsize>9</pointsize>
+                        </font>
+                       </property>
                        <property name="text">
                         <string/>
                        </property>
@@ -269,6 +349,11 @@
                      </item>
                      <item row="0" column="1">
                       <widget class="QLabel" name="label">
+                       <property name="font">
+                        <font>
+                         <pointsize>9</pointsize>
+                        </font>
+                       </property>
                        <property name="text">
                         <string>Coefficients</string>
                        </property>
@@ -284,31 +369,142 @@
                 </widget>
                </item>
                <item>
-                <layout class="QVBoxLayout" name="verticalLayout">
-                 <item>
-                  <widget class="QGroupBox" name="groupBox">
-                   <property name="title">
-                    <string>Plot</string>
-                   </property>
-                   <layout class="QHBoxLayout" name="horizontalLayout_6">
-                    <item>
-                     <widget class="QPushButton" name="btn_2dplotstart">
-                      <property name="text">
-                       <string>Start</string>
-                      </property>
-                     </widget>
-                    </item>
-                    <item>
-                     <widget class="QPushButton" name="btn_2dplotstop">
-                      <property name="text">
-                       <string>Stop</string>
-                      </property>
-                     </widget>
-                    </item>
-                   </layout>
-                  </widget>
-                 </item>
-                </layout>
+                <widget class="QGroupBox" name="groupBox">
+                 <property name="title">
+                  <string>Plot</string>
+                 </property>
+                 <layout class="QGridLayout" name="gridLayout_12">
+                  <item row="1" column="2">
+                   <widget class="QPushButton" name="btn_2dplotstop">
+                    <property name="font">
+                     <font>
+                      <pointsize>9</pointsize>
+                     </font>
+                    </property>
+                    <property name="text">
+                     <string>Stop</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item row="1" column="1">
+                   <widget class="QPushButton" name="btn_2dplotstart">
+                    <property name="font">
+                     <font>
+                      <pointsize>9</pointsize>
+                     </font>
+                    </property>
+                    <property name="text">
+                     <string>Start</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item row="0" column="1" colspan="2">
+                   <widget class="QGroupBox" name="groupbox_plotborders">
+                    <property name="title">
+                     <string>Plot Borders</string>
+                    </property>
+                    <layout class="QGridLayout" name="gridLayout_13">
+                     <item row="1" column="0">
+                      <widget class="QLineEdit" name="lineedit_xmin">
+                       <property name="font">
+                        <font>
+                         <pointsize>9</pointsize>
+                        </font>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="1" column="1">
+                      <widget class="QLineEdit" name="lineedit_xmax">
+                       <property name="font">
+                        <font>
+                         <pointsize>9</pointsize>
+                        </font>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="1" column="3">
+                      <widget class="QLineEdit" name="lineedit_ymax">
+                       <property name="font">
+                        <font>
+                         <pointsize>9</pointsize>
+                        </font>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="1" column="2">
+                      <widget class="QLineEdit" name="lineedit_ymin">
+                       <property name="font">
+                        <font>
+                         <pointsize>9</pointsize>
+                        </font>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="0" column="0">
+                      <widget class="QLabel" name="lbl_xmin">
+                       <property name="font">
+                        <font>
+                         <pointsize>9</pointsize>
+                        </font>
+                       </property>
+                       <property name="text">
+                        <string>X Min</string>
+                       </property>
+                       <property name="alignment">
+                        <set>Qt::AlignCenter</set>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="0" column="1">
+                      <widget class="QLabel" name="lbl_xmax">
+                       <property name="font">
+                        <font>
+                         <pointsize>9</pointsize>
+                        </font>
+                       </property>
+                       <property name="text">
+                        <string>X Max</string>
+                       </property>
+                       <property name="alignment">
+                        <set>Qt::AlignCenter</set>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="0" column="2">
+                      <widget class="QLabel" name="lbl_ymin">
+                       <property name="font">
+                        <font>
+                         <pointsize>9</pointsize>
+                        </font>
+                       </property>
+                       <property name="text">
+                        <string>Y Min</string>
+                       </property>
+                       <property name="alignment">
+                        <set>Qt::AlignCenter</set>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="0" column="3">
+                      <widget class="QLabel" name="lbl_ymax">
+                       <property name="font">
+                        <font>
+                         <pointsize>9</pointsize>
+                        </font>
+                       </property>
+                       <property name="text">
+                        <string>Y Max</string>
+                       </property>
+                       <property name="alignment">
+                        <set>Qt::AlignCenter</set>
+                       </property>
+                      </widget>
+                     </item>
+                    </layout>
+                   </widget>
+                  </item>
+                 </layout>
+                </widget>
                </item>
                <item>
                 <spacer name="verticalSpacer">
@@ -341,13 +537,13 @@
              <widget class="QFrame" name="frame">
               <property name="minimumSize">
                <size>
-                <width>475</width>
+                <width>400</width>
                 <height>0</height>
                </size>
               </property>
               <property name="maximumSize">
                <size>
-                <width>475</width>
+                <width>400</width>
                 <height>16777215</height>
                </size>
               </property>
@@ -366,6 +562,11 @@
                  <layout class="QGridLayout" name="gridLayout_4">
                   <item row="0" column="0">
                    <widget class="QPushButton" name="btn_plotstart">
+                    <property name="font">
+                     <font>
+                      <pointsize>9</pointsize>
+                     </font>
+                    </property>
                     <property name="text">
                      <string>Start</string>
                     </property>
@@ -373,6 +574,11 @@
                   </item>
                   <item row="0" column="1">
                    <widget class="QPushButton" name="btn_plotstop">
+                    <property name="font">
+                     <font>
+                      <pointsize>9</pointsize>
+                     </font>
+                    </property>
                     <property name="text">
                      <string>Stop</string>
                     </property>
@@ -395,6 +601,11 @@
                     <layout class="QGridLayout" name="gridLayout_5">
                      <item row="0" column="1">
                       <widget class="QLabel" name="lbl_mqfd">
+                       <property name="font">
+                        <font>
+                         <pointsize>9</pointsize>
+                        </font>
+                       </property>
                        <property name="text">
                         <string>FD: </string>
                        </property>
@@ -407,6 +618,11 @@
                          <width>65</width>
                          <height>16777215</height>
                         </size>
+                       </property>
+                       <property name="font">
+                        <font>
+                         <pointsize>9</pointsize>
+                        </font>
                        </property>
                        <property name="text">
                         <string>Choose</string>
@@ -437,6 +653,11 @@
                     <layout class="QGridLayout" name="gridLayout">
                      <item row="0" column="2" colspan="3">
                       <widget class="QLineEdit" name="lineedit_ipaddress">
+                       <property name="font">
+                        <font>
+                         <pointsize>9</pointsize>
+                        </font>
+                       </property>
                        <property name="text">
                         <string/>
                        </property>
@@ -450,6 +671,11 @@
                      </item>
                      <item row="3" column="4">
                       <widget class="QPushButton" name="btn_sendservercmd">
+                       <property name="font">
+                        <font>
+                         <pointsize>9</pointsize>
+                        </font>
+                       </property>
                        <property name="text">
                         <string>Send</string>
                        </property>
@@ -463,6 +689,11 @@
                          <height>16777215</height>
                         </size>
                        </property>
+                       <property name="font">
+                        <font>
+                         <pointsize>9</pointsize>
+                        </font>
+                       </property>
                        <property name="text">
                         <string>IP:</string>
                        </property>
@@ -470,6 +701,11 @@
                      </item>
                      <item row="2" column="2" colspan="2">
                       <widget class="QLabel" name="lbl_serverterminal">
+                       <property name="font">
+                        <font>
+                         <pointsize>9</pointsize>
+                        </font>
+                       </property>
                        <property name="text">
                         <string>Server Terminal</string>
                        </property>
@@ -480,14 +716,19 @@
                        <property name="minimumSize">
                         <size>
                          <width>0</width>
-                         <height>200</height>
+                         <height>175</height>
                         </size>
                        </property>
                        <property name="maximumSize">
                         <size>
                          <width>16777215</width>
-                         <height>200</height>
+                         <height>175</height>
                         </size>
+                       </property>
+                       <property name="font">
+                        <font>
+                         <pointsize>9</pointsize>
+                        </font>
                        </property>
                        <property name="readOnly">
                         <bool>true</bool>
@@ -496,6 +737,11 @@
                      </item>
                      <item row="3" column="2" colspan="2">
                       <widget class="QLineEdit" name="lineedit_servercmd">
+                       <property name="font">
+                        <font>
+                         <pointsize>9</pointsize>
+                        </font>
+                       </property>
                        <property name="placeholderText">
                         <string>EMG Server Command</string>
                        </property>
@@ -525,6 +771,11 @@
                       <height>16777215</height>
                      </size>
                     </property>
+                    <property name="font">
+                     <font>
+                      <pointsize>9</pointsize>
+                     </font>
+                    </property>
                     <property name="text">
                      <string>Connect</string>
                     </property>
@@ -532,6 +783,11 @@
                   </item>
                   <item row="3" column="4">
                    <widget class="QLabel" name="lbl_statusemgio">
+                    <property name="font">
+                     <font>
+                      <pointsize>9</pointsize>
+                     </font>
+                    </property>
                     <property name="text">
                      <string>Status: Disconnected</string>
                     </property>
@@ -546,18 +802,13 @@
                   <string>Choose Active EMG Sensors</string>
                  </property>
                  <layout class="QGridLayout" name="gridLayout_3">
-                  <item row="1" column="1">
-                   <widget class="QPushButton" name="btn_emg4">
-                    <property name="text">
-                     <string>EMG 4</string>
-                    </property>
-                    <property name="checkable">
-                     <bool>true</bool>
-                    </property>
-                   </widget>
-                  </item>
                   <item row="2" column="0">
                    <widget class="QPushButton" name="btn_emg5">
+                    <property name="font">
+                     <font>
+                      <pointsize>9</pointsize>
+                     </font>
+                    </property>
                     <property name="text">
                      <string>EMG 5</string>
                     </property>
@@ -568,6 +819,11 @@
                   </item>
                   <item row="0" column="1">
                    <widget class="QPushButton" name="btn_emg2">
+                    <property name="font">
+                     <font>
+                      <pointsize>9</pointsize>
+                     </font>
+                    </property>
                     <property name="text">
                      <string>EMG 2</string>
                     </property>
@@ -578,6 +834,11 @@
                   </item>
                   <item row="0" column="0">
                    <widget class="QPushButton" name="btn_emg1">
+                    <property name="font">
+                     <font>
+                      <pointsize>9</pointsize>
+                     </font>
+                    </property>
                     <property name="text">
                      <string>EMG 1</string>
                     </property>
@@ -591,6 +852,11 @@
                   </item>
                   <item row="2" column="1">
                    <widget class="QPushButton" name="btn_emg6">
+                    <property name="font">
+                     <font>
+                      <pointsize>9</pointsize>
+                     </font>
+                    </property>
                     <property name="text">
                      <string>EMG 6</string>
                     </property>
@@ -599,18 +865,28 @@
                     </property>
                    </widget>
                   </item>
-                  <item row="3" column="0">
-                   <widget class="QPushButton" name="btn_emg7">
+                  <item row="0" column="3">
+                   <widget class="QPushButton" name="btn_emg4">
+                    <property name="font">
+                     <font>
+                      <pointsize>9</pointsize>
+                     </font>
+                    </property>
                     <property name="text">
-                     <string>EMG 7</string>
+                     <string>EMG 4</string>
                     </property>
                     <property name="checkable">
                      <bool>true</bool>
                     </property>
                    </widget>
                   </item>
-                  <item row="1" column="0">
+                  <item row="0" column="2">
                    <widget class="QPushButton" name="btn_emg3">
+                    <property name="font">
+                     <font>
+                      <pointsize>9</pointsize>
+                     </font>
+                    </property>
                     <property name="text">
                      <string>EMG 3</string>
                     </property>
@@ -619,8 +895,28 @@
                     </property>
                    </widget>
                   </item>
-                  <item row="3" column="1">
+                  <item row="2" column="2">
+                   <widget class="QPushButton" name="btn_emg7">
+                    <property name="font">
+                     <font>
+                      <pointsize>9</pointsize>
+                     </font>
+                    </property>
+                    <property name="text">
+                     <string>EMG 7</string>
+                    </property>
+                    <property name="checkable">
+                     <bool>true</bool>
+                    </property>
+                   </widget>
+                  </item>
+                  <item row="2" column="3">
                    <widget class="QPushButton" name="btn_emg8">
+                    <property name="font">
+                     <font>
+                      <pointsize>9</pointsize>
+                     </font>
+                    </property>
                     <property name="text">
                      <string>EMG 8</string>
                     </property>
