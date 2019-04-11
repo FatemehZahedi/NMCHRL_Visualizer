@@ -15,16 +15,24 @@ import time
 import numpy as np
 from collections import deque
 
-class TwoDimSharedMemoryConsumer(QThread)
+class TwoDimSharedMemoryConsumer(QThread):
 
+    SupplyFilteredData = pyqtSignal(np.ndarray)
+    SupplyUnfilteredData = pyqtSignal(np.ndarray)
 
-    def __init__(self, filterCoeffs):
+    def __init__(self, filterCoeffs, dtype, dtypeBytes, shm):
         # filterCoeffs is a list of 2 numpy arrays of Butterworth coefficients
         QThread.__init__(self)
         self._dataLenMax = 11
-        self._dataUnfilt = np.zeros(self._dataLenMax)
-        self._dataFilt = np.zeros(self._dataLenMax)
+        self._dataUnfilt = np.zeros((2,self._dataLenMax))
+        self._dataFilt = np.zeros((2,self._dataLenMax))
         self.SetFilter(filterCoeffs)
+        self.SetDataType(dtype)
+        self.SetDataTypeBytes(dtypeBytes)
+        self.SetSharedMemory(shm)
+        self._Timer = QtCore.QTimer()
+        self._Timer.setInterval(1.0) # 1ms interval (1000Hz)
+        self._Timer.timeout.connect(self.RunTask)
 
     def SetFilter(self, filterCoeffs):
         # filterCoeffs is a list of 2 numpy arrays of Butterworth coefficients
@@ -33,7 +41,7 @@ class TwoDimSharedMemoryConsumer(QThread)
         self._filterNum[0:len(filterCoeffs[0])] = filterCoeffs[0]
         self._filterDen[0:len(filterCoeffs[1])] = filterCoeffs[1]
 
-    def ApplyFilter(self, newData):
+    def ProcessData(self, newData):
         # Shift data array contents for new data
         self._dataUnfilt[:,1:] = self._dataUnfilt[:,0:-1]
         self._dataFilt[:,1:] = self._dataFilt[:,0:-1]
@@ -42,7 +50,38 @@ class TwoDimSharedMemoryConsumer(QThread)
         self._dataUnfilt[:,0] = newData
 
         # Filter data and insert into filtered array
-        self._dataFilt[0,0] = self._filterNum.dot(self._dataUnfilt)
+        self._dataFilt[0,0] = (self._filterNum.dot(self._dataUnfilt[0,:]) -
+                               self._filterDen[1:].dot(self._dataFilt[0,1:]))/self._filterDen[0]
+        self._dataFilt[1,0] = (self._filterNum.dot(self._dataUnfilt[1,:]) -
+                               self._filterDen[1:].dot(self._dataFilt[1,1:]))/self._filterDen[0]
+
+    def SetDataType(self, dtype):
+        self._dataType = dtype
+
+    def SetDataTypeBytes(self, dtypeBytes):
+        self._dataTypeBytes = dtypeBytes
+
+    def SetSharedMemory(self, shm):
+        self._shm = shm
+
+    def ReadSharedMemory(self):
+        nFloats = 2     #x and y coordinate
+        data_bytes = self._shm.read(nFloats*self._dataTypeBytes)
+        data_temp = np.frombuffer(data_bytes, dtype=self._dataType)
+        return data_temp
+
+    def RunTask(self):
+        data_temp = self.ReadSharedMemory()
+        self.ProcessData(data_temp)
+        self.SupplyFilteredData(self._dataFilt[:,0])
+        self.SupplyUnfilteredData(self._dataUnfilt[:,0])
+
+    def StartTask(self):
+        self._Timer.start()
+
+    def StopTask(self):
+        self._Timer.stop()
+
 
 class MainWindow(QMainWindow):
 
@@ -73,6 +112,8 @@ class MainWindow(QMainWindow):
     _threadname_emgdatarecv = "THREAD_EMGDATARECV"
     _threadname_emgcommrecv = "THREAD_EMGCOMMRECV"
 
+
+    # Shared Memory Class Data
     _filterCoeffs = {
                     'nofilter': [np.array([1]),np.array([1])],
                     'defaultfilter': [np.array([1,2]),np.array([3,4,5])],
@@ -81,22 +122,33 @@ class MainWindow(QMainWindow):
     _shmFile = None
     _shmKey = None
 
-    _coordinatesUnfiltered = np.zeros((2,11))
-    _coordinatesFiltered = np.zeros((2,11))
+    _coordinatesUnfiltered = np.zeros(2)
+    _coordinatesFiltered = np.zeros(2)
 
-
+    _dataType = None
+    _dataTypeBytes = None
+    _shm = None
+    _filter = None
+    _SharedMemoryThread = None
 
     def __init__(self):
         super(MainWindow, self).__init__()
         self.setGeometry(0, 0, 1100, 600)
         uic.loadUi('visualizer_app.ui', self)
 
-        self.InitializeTwoDimPlotTab()
+        self.InitTabWidgetSlots()
+        self.InitTwoDimPlotTab()
         self.InitializeEmgTab()
 
         self.show()
 
-    def InitializeTwoDimPlotTab(self):
+    def InitTabWidgetSlots(self):
+        self.tabWidget.currentChanged.connect(self.PrintTabName)
+
+    def PrintTabName(self):
+        print(self.tabWidget.currentWidget().objectName())
+
+    def InitTwoDimPlotTab(self):
         self.Init2DPlot()
         self.Init2DButtons()
 
@@ -120,7 +172,7 @@ class MainWindow(QMainWindow):
     def Init2DButtons(self):
         # Connect Pushbutton Clicked Signals to Slots
         self.btn_selectshmfile.clicked.connect(self.SelectShmFile)
-        self.btn_connect2ddata.clicked.connect(self.ConnectSharedMemory)
+        self.btn_connect2ddata.clicked.connect(self.Connect2DData)
         self.btn_selectfilterfile.clicked.connect(self.SelectFilterFile)
         self.btn_2dplotstart.clicked.connect(self.Start2DPlot)
         self.btn_2dplotstop.clicked.connect(self.Stop2DPlot)
@@ -150,32 +202,69 @@ class MainWindow(QMainWindow):
         self.rbtn_float32.setChecked(True)
         self.rbtn_float32.click()
 
+        # Connect Buttons to Start Shm Thread Task
+        self.btn_shmthreadstart.clicked.connect(self.StartShmThreadTask)
+        self.btn_shmthreadstop.clicked.connect(self.StopShmThreadTask)
+
+    def StartShmThreadTask(self):
+
+        widgetlist = [self.groupbox_shmfile,
+                      self.groupbox_shmdatatype,
+                      self.groupbox_butterworth]
+
+        for widget in widgetlist:
+            widget.setEnabled(False)
+
+        if (self._SharedMemoryThread is not None):
+            self._SharedMemoryThread.StartTask()
+
+    def StopShmThreadTask(self):
+        widgetlist = [self.groupbox_shmfile,
+                      self.groupbox_shmdatatype,
+                      self.groupbox_butterworth]
+
+        for widget in widgetlist:
+            widget.setEnabled(True)
+
+        if (self._SharedMemoryThread is not None):
+            self._SharedMemoryThread.StopTask()
+
+    def Update2DFilteredData(self, data):
+        self._coordinatesFiltered = data
+
+    def Update2DUnfilteredData(self, data):
+        self._coordinatesUnfiltered = data
+
     def Connect2DData(self):
-        pass
+        # Check Dependencies for TwoDimSharedMemoryConsumer
+        msg = ""
+        dependenciesNotMet = False
+        if (self._dataType is None):
+            msg += "Data Type Not Set\n"
+            dependenciesNotMet = True
+        if (self._dataTypeBytes is None):
+            msg += "Data Type Bytes Not Set\n"
+            dependenciesNotMet = True
+        if (self._shm is None):
+            msg += "Shared Memory Not Set\n"
+            dependenciesNotMet = True
+        if (self._filter is None):
+            msg += "Filter Not Set"
+            dependenciesNotMet = True
+        if (dependenciesNotMet):
+            msgbox = QMessageBox(text=msg)
+            msgbox.exec_()
+            return
+
+        self._SharedMemoryThread = TwoDimSharedMemoryConsumer()
+        self._SharedMemoryThread.SupplyFilteredData.connect(self.Update2DFilteredData)
+        self._SharedMemoryThread.SupplyUnfilteredData.connect(self.Update2DUnfilteredData)
+        self._SharedMemoryThread.StartTimer()
 
     def ReadSharedMemory(self):
         nFloats = 2     #x and y coordinate
         coordinates_bytes = self._shm.read(nFloats*self._dataTypeBytes)
         coordinates_temp = np.frombuffer(coordinates_bytes)
-
-    def ProcessNewData(self, newUnfilteredData):
-        # This function makes space for the new data in the unfiltered and filtered
-        # data arrays, inserted the unfiltered data into the unfiltered array, and
-        # applies a Butterworth filter to the data, which is then inserted into the
-        # filtered array.  The unfiltered and filtered data arrays are 2x11.
-        # The x data is in coordinates[0,:] row, the y data is in the coordinates[1,:] row
-
-        # Shift rows on unfiltered and filtered data arrays to make room for new data
-        self._coordinatesUnfiltered[:,1:] = self._coordinatesUnfiltered[:, 0:-1]
-        self._coordinatesFiltered[:,1:] = self._coordinatesFiltered[:,0:-1]
-
-        # Inserted new unfilterd data
-        self._coordinatesUnfiltered[:,0] = newUnfilteredData
-
-        # Apply Butterworth filter
-        b = self._filter[0] # numerator coefficients
-        a = self._filter[1] # denominator coefficients
-        self._coordinatesFiltered[0,0] = b.dot(self._coordinatesUnfiltered[0,0:len(b)])
 
     def DisconnectSharedMemory(self):
         sysv_ipc.remove_shared_memory(self._shm.id)
@@ -221,6 +310,10 @@ class MainWindow(QMainWindow):
 
         # Set filter
         self._filter = self._filterCoeffs[filterStr]
+
+        # Set filter in 2D shared memory thread
+        if (self._SharedMemoryThread is not None):
+            self._SharedMemoryThread.SetFilter(self._filter)
 
     def Start2DPlot(self):
         res = self.SetPlotBorders()
