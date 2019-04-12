@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>1104</width>
-    <height>834</height>
+    <height>903</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -315,7 +315,7 @@
                          </widget>
                         </item>
                         <item row="0" column="1">
-                         <widget class="QLabel" name="label">
+                         <widget class="QLabel" name="lbl_coefficientheader">
                           <property name="font">
                            <font>
                             <pointsize>9</pointsize>
@@ -361,6 +361,9 @@
                         </item>
                         <item row="0" column="1">
                          <widget class="QPushButton" name="btn_shmthreadstop">
+                          <property name="enabled">
+                           <bool>false</bool>
+                          </property>
                           <property name="font">
                            <font>
                             <pointsize>9</pointsize>
@@ -569,6 +572,200 @@
                   </size>
                  </property>
                 </spacer>
+               </item>
+              </layout>
+             </widget>
+            </item>
+            <item>
+             <spacer name="horizontalSpacer">
+              <property name="orientation">
+               <enum>Qt::Horizontal</enum>
+              </property>
+              <property name="sizeHint" stdset="0">
+               <size>
+                <width>40</width>
+                <height>20</height>
+               </size>
+              </property>
+             </spacer>
+            </item>
+            <item>
+             <widget class="QGroupBox" name="groupBox_2">
+              <property name="minimumSize">
+               <size>
+                <width>300</width>
+                <height>0</height>
+               </size>
+              </property>
+              <property name="maximumSize">
+               <size>
+                <width>300</width>
+                <height>16777215</height>
+               </size>
+              </property>
+              <property name="title">
+               <string>EMG Activity</string>
+              </property>
+              <layout class="QGridLayout" name="gridLayout_18">
+               <item row="3" column="3">
+                <widget class="QLabel" name="label_8">
+                 <property name="text">
+                  <string>EMG8</string>
+                 </property>
+                </widget>
+               </item>
+               <item row="1" column="2">
+                <widget class="QLabel" name="label_3">
+                 <property name="text">
+                  <string>EMG3</string>
+                 </property>
+                </widget>
+               </item>
+               <item row="3" column="2">
+                <widget class="QLabel" name="label_7">
+                 <property name="text">
+                  <string>EMG7</string>
+                 </property>
+                </widget>
+               </item>
+               <item row="3" column="0">
+                <widget class="QLabel" name="label_5">
+                 <property name="text">
+                  <string>EMG5</string>
+                 </property>
+                </widget>
+               </item>
+               <item row="1" column="3">
+                <widget class="QLabel" name="label_4">
+                 <property name="text">
+                  <string>EMG4</string>
+                 </property>
+                </widget>
+               </item>
+               <item row="0" column="2">
+                <widget class="QProgressBar" name="progressBar_4">
+                 <property name="value">
+                  <number>1</number>
+                 </property>
+                 <property name="alignment">
+                  <set>Qt::AlignCenter</set>
+                 </property>
+                 <property name="orientation">
+                  <enum>Qt::Vertical</enum>
+                 </property>
+                </widget>
+               </item>
+               <item row="0" column="3">
+                <widget class="QProgressBar" name="progressBar_2">
+                 <property name="value">
+                  <number>1</number>
+                 </property>
+                 <property name="alignment">
+                  <set>Qt::AlignCenter</set>
+                 </property>
+                 <property name="orientation">
+                  <enum>Qt::Vertical</enum>
+                 </property>
+                </widget>
+               </item>
+               <item row="3" column="1">
+                <widget class="QLabel" name="label_6">
+                 <property name="text">
+                  <string>EMG6</string>
+                 </property>
+                </widget>
+               </item>
+               <item row="1" column="0">
+                <widget class="QLabel" name="label">
+                 <property name="text">
+                  <string>EMG1</string>
+                 </property>
+                </widget>
+               </item>
+               <item row="1" column="1">
+                <widget class="QLabel" name="label_2">
+                 <property name="text">
+                  <string>EMG2</string>
+                 </property>
+                </widget>
+               </item>
+               <item row="0" column="0">
+                <widget class="QProgressBar" name="progressBar_6">
+                 <property name="value">
+                  <number>1</number>
+                 </property>
+                 <property name="alignment">
+                  <set>Qt::AlignCenter</set>
+                 </property>
+                 <property name="orientation">
+                  <enum>Qt::Vertical</enum>
+                 </property>
+                </widget>
+               </item>
+               <item row="0" column="1">
+                <widget class="QProgressBar" name="progressBar_5">
+                 <property name="value">
+                  <number>1</number>
+                 </property>
+                 <property name="alignment">
+                  <set>Qt::AlignCenter</set>
+                 </property>
+                 <property name="orientation">
+                  <enum>Qt::Vertical</enum>
+                 </property>
+                </widget>
+               </item>
+               <item row="2" column="0">
+                <widget class="QProgressBar" name="progressBar_8">
+                 <property name="value">
+                  <number>1</number>
+                 </property>
+                 <property name="alignment">
+                  <set>Qt::AlignCenter</set>
+                 </property>
+                 <property name="orientation">
+                  <enum>Qt::Vertical</enum>
+                 </property>
+                </widget>
+               </item>
+               <item row="2" column="1">
+                <widget class="QProgressBar" name="progressBar_7">
+                 <property name="value">
+                  <number>1</number>
+                 </property>
+                 <property name="alignment">
+                  <set>Qt::AlignCenter</set>
+                 </property>
+                 <property name="orientation">
+                  <enum>Qt::Vertical</enum>
+                 </property>
+                </widget>
+               </item>
+               <item row="2" column="2">
+                <widget class="QProgressBar" name="progressBar">
+                 <property name="value">
+                  <number>1</number>
+                 </property>
+                 <property name="alignment">
+                  <set>Qt::AlignCenter</set>
+                 </property>
+                 <property name="orientation">
+                  <enum>Qt::Vertical</enum>
+                 </property>
+                </widget>
+               </item>
+               <item row="2" column="3">
+                <widget class="QProgressBar" name="progressBar_3">
+                 <property name="value">
+                  <number>1</number>
+                 </property>
+                 <property name="alignment">
+                  <set>Qt::AlignCenter</set>
+                 </property>
+                 <property name="orientation">
+                  <enum>Qt::Vertical</enum>
+                 </property>
+                </widget>
                </item>
               </layout>
              </widget>

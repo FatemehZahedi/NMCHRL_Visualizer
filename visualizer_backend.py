@@ -3,7 +3,7 @@
 from PyQt5 import QtWidgets, uic, QtCore
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget,
                             QPushButton, QButtonGroup, QFileDialog,
-                            QMessageBox)
+                            QMessageBox, QSizePolicy)
 from PyQt5.QtCore import QObject, QThread, pyqtSignal
 
 import os
@@ -133,7 +133,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super(MainWindow, self).__init__()
-        self.setGeometry(0, 0, 1100, 600)
+        self.showMaximized()
         uic.loadUi('visualizer_app.ui', self)
 
         self.InitTabWidgetSlots()
@@ -164,9 +164,11 @@ class MainWindow(QMainWindow):
                                  colspan=1,
                                  axisItems={'left': yAxisItem,
                                             'bottom': xAxisItem})
+        percentOfMainWindowHeight = 0.85
+        plotWidget.setFixedSize(self.height(),self.height())
         plt.setRange(xRange=(-1,1), yRange=(-1,1), padding=0.0)
         plt.show()
-        self.horizontallayout_2d.addWidget(plotWidget)
+        self.horizontallayout_2d.insertWidget(1,plotWidget)
         self._plot2d = plt
 
     def Init2DButtons(self):
@@ -208,23 +210,44 @@ class MainWindow(QMainWindow):
 
     def StartShmThreadTask(self):
 
-        widgetlist = [self.groupbox_shmfile,
-                      self.groupbox_shmdatatype,
-                      self.groupbox_butterworth]
+        # Disable Buttons For Data IO Buttons
+        widgetlist = [self.btn_selectshmfile,
+                      self.btn_selectfilterfile,
+                      self.btn_connect2ddata,
+                      self.btn_shmthreadstart]
+
+        for rbtn in self.rbtngroup_filter.buttons():
+            if not rbtn.isChecked():
+                rbtn.setEnabled(False)
+
+        for rbtn in self.rbtngroup_datatype.buttons():
+            if not rbtn.isChecked():
+                rbtn.setEnabled(False)
 
         for widget in widgetlist:
             widget.setEnabled(False)
+
+        self.btn_shmthreadstop.setEnabled(True)
 
         if (self._SharedMemoryThread is not None):
             self._SharedMemoryThread.StartTask()
 
     def StopShmThreadTask(self):
-        widgetlist = [self.groupbox_shmfile,
-                      self.groupbox_shmdatatype,
-                      self.groupbox_butterworth]
+        widgetlist = [self.btn_selectshmfile,
+                      self.btn_selectfilterfile,
+                      self.btn_connect2ddata,
+                      self.btn_shmthreadstart]
+
+        for rbtn in self.rbtngroup_filter.buttons():
+            rbtn.setEnabled(True)
+
+        for rbtn in self.rbtngroup_datatype.buttons():
+            rbtn.setEnabled(True)
 
         for widget in widgetlist:
             widget.setEnabled(True)
+
+        self.btn_shmthreadstop.setEnabled(False)
 
         if (self._SharedMemoryThread is not None):
             self._SharedMemoryThread.StopTask()
@@ -329,6 +352,10 @@ class MainWindow(QMainWindow):
             xmax = float(self.lineedit_xmax.text())
             ymin = float(self.lineedit_ymin.text())
             ymax = float(self.lineedit_ymax.text())
+            self._plot2d.setRange(xRange=(xmin,xmax), yRange=(ymin,ymax))
+            self._plot2d.setLimits(xMin=xmin, xMax=xmax, yMin=ymin, yMax=ymax)
+            self._plot2d.setMouseEnabled(x=False, y=False)
+            self._plot2d.setAspectLocked()
             return 0
         except ValueError as err:
             msg = "Plot Border Input Could Not Be Converted To A Number"
