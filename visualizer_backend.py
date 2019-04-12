@@ -14,6 +14,9 @@ import threading
 import time
 import numpy as np
 from collections import deque
+import matplotlib.pyplot as plt
+from matplotlib.figure import Figure
+from matplotlib.backends.backend_qt5agg import FigureCanvas
 
 class TwoDimSharedMemoryConsumer(QThread):
 
@@ -151,25 +154,20 @@ class MainWindow(QMainWindow):
     def InitTwoDimPlotTab(self):
         self.Init2DPlot()
         self.Init2DButtons()
+        self.Init2DPlotTimer()
 
     def Init2DPlot(self):
-        pg.setConfigOption('background', 'w')
-        pg.setConfigOption('foreground', 'k')
-        xAxisItem = pg.AxisItem(orientation='bottom', showValues=True)
-        yAxisItem = pg.AxisItem(orientation='left', showValues=True)
-        plotWidget = pg.GraphicsLayoutWidget()
-        plt = plotWidget.addPlot(row=0,
-                                 col=0,
-                                 rowspan=1,
-                                 colspan=1,
-                                 axisItems={'left': yAxisItem,
-                                            'bottom': xAxisItem})
-        percentOfMainWindowHeight = 0.85
-        plotWidget.setFixedSize(self.height(),self.height())
-        plt.setRange(xRange=(-1,1), yRange=(-1,1), padding=0.0)
-        plt.show()
-        self.horizontallayout_2d.insertWidget(1,plotWidget)
-        self._plot2d = plt
+        circle1 = plt.Circle((0.5, 0.5), 0.2, color='r')
+        self._plot2d = FigureCanvas(Figure(figsize=(10,10), tight_layout=True))
+        self.horizontallayout_2d.insertWidget(2,self._plot2d)
+        self._plot2dax = self._plot2d.figure.subplots()
+        self._plot2dax.add_artist(circle1)
+
+    def Init2DPlotTimer(self):
+        self._plot2dTimer = QtCore.QTimer()
+        self._plot2dTimer.setInterval(20) #20ms
+        self._plot2dTimer.timeout.connect(self.Update2DPlot)
+
 
     def Init2DButtons(self):
         # Connect Pushbutton Clicked Signals to Slots
@@ -259,6 +257,9 @@ class MainWindow(QMainWindow):
         self._coordinatesUnfiltered = data
 
     def Connect2DData(self):
+
+        # Connect shared memory
+
         # Check Dependencies for TwoDimSharedMemoryConsumer
         msg = ""
         dependenciesNotMet = False
@@ -279,15 +280,14 @@ class MainWindow(QMainWindow):
             msgbox.exec_()
             return
 
-        self._SharedMemoryThread = TwoDimSharedMemoryConsumer()
+        self._SharedMemoryThread = TwoDimSharedMemoryConsumer(self._filter,
+                                                              self._dataType,
+                                                              self._dataTypeBytes,
+                                                              self._shm)
         self._SharedMemoryThread.SupplyFilteredData.connect(self.Update2DFilteredData)
         self._SharedMemoryThread.SupplyUnfilteredData.connect(self.Update2DUnfilteredData)
         self._SharedMemoryThread.StartTimer()
 
-    def ReadSharedMemory(self):
-        nFloats = 2     #x and y coordinate
-        coordinates_bytes = self._shm.read(nFloats*self._dataTypeBytes)
-        coordinates_temp = np.frombuffer(coordinates_bytes)
 
     def DisconnectSharedMemory(self):
         sysv_ipc.remove_shared_memory(self._shm.id)
@@ -343,8 +343,27 @@ class MainWindow(QMainWindow):
         if (res == 1):
             return
 
+        widgetlist = [self.lineedit_xmin,
+                      self.lineedit_xmax,
+                      self.lineedit_ymin,
+                      self.lineedit_ymax]
+
+        for widget in widgetlist:
+            widget.setEnabled(False)
+
+        self._plot2dTimer.start()
+
+    def Update2DPlot(self):
+        print(self._coordinatesFiltered)
+
     def Stop2DPlot(self):
-        pass
+        widgetlist = [self.lineedit_xmin,
+                      self.lineedit_xmax,
+                      self.lineedit_ymin,
+                      self.lineedit_ymax]
+
+        for widget in widgetlist:
+            widget.setEnabled(True)
 
     def SetPlotBorders(self):
         try:
@@ -352,10 +371,9 @@ class MainWindow(QMainWindow):
             xmax = float(self.lineedit_xmax.text())
             ymin = float(self.lineedit_ymin.text())
             ymax = float(self.lineedit_ymax.text())
-            self._plot2d.setRange(xRange=(xmin,xmax), yRange=(ymin,ymax))
-            self._plot2d.setLimits(xMin=xmin, xMax=xmax, yMin=ymin, yMax=ymax)
-            self._plot2d.setMouseEnabled(x=False, y=False)
-            self._plot2d.setAspectLocked()
+            self._plot2dax.set_xlim(xmin,xmax)
+            self._plot2dax.set_ylim(ymin,ymax)
+            self._plot2dax.figure.canvas.draw()
             return 0
         except ValueError as err:
             msg = "Plot Border Input Could Not Be Converted To A Number"
