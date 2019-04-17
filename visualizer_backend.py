@@ -259,6 +259,7 @@ class MainWindow(QMainWindow):
     def Connect2DData(self):
 
         # Connect shared memory
+        self.ConnectSharedMemory()
 
         # Check Dependencies for TwoDimSharedMemoryConsumer
         msg = ""
