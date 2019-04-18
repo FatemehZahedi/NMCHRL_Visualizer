@@ -17,6 +17,8 @@ from collections import deque
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_qt5agg import FigureCanvas
+from matplotlib.patches import Circle
+import sysv_ipc
 
 class TwoDimSharedMemoryConsumer(QThread):
 
@@ -76,8 +78,8 @@ class TwoDimSharedMemoryConsumer(QThread):
     def RunTask(self):
         data_temp = self.ReadSharedMemory()
         self.ProcessData(data_temp)
-        self.SupplyFilteredData(self._dataFilt[:,0])
-        self.SupplyUnfilteredData(self._dataUnfilt[:,0])
+        self.SupplyFilteredData.emit(self._dataFilt[:,0])
+        self.SupplyUnfilteredData.emit(self._dataUnfilt[:,0])
 
     def StartTask(self):
         self._Timer.start()
@@ -157,7 +159,7 @@ class MainWindow(QMainWindow):
         self.Init2DPlotTimer()
 
     def Init2DPlot(self):
-        circle1 = plt.Circle((0.5, 0.5), 0.2, color='r')
+        circle1 = plt.Circle((0.5, 0.5), 0.05, color='r')
         self._plot2d = FigureCanvas(Figure(figsize=(10,10), tight_layout=True))
         self.horizontallayout_2d.insertWidget(2,self._plot2d)
         self._plot2dax = self._plot2d.figure.subplots()
@@ -287,7 +289,7 @@ class MainWindow(QMainWindow):
                                                               self._shm)
         self._SharedMemoryThread.SupplyFilteredData.connect(self.Update2DFilteredData)
         self._SharedMemoryThread.SupplyUnfilteredData.connect(self.Update2DUnfilteredData)
-        self._SharedMemoryThread.StartTimer()
+        self._SharedMemoryThread.StartTask()
 
 
     def DisconnectSharedMemory(self):
@@ -352,10 +354,20 @@ class MainWindow(QMainWindow):
         for widget in widgetlist:
             widget.setEnabled(False)
 
+        # Initialize Circle In Plot
+        self._plot2dax.clear()
+        center = ((self._xmax + self._xmin)/2, (self._ymax + self._ymin)/2)
+        radius = np.min(np.array([np.abs(self._xmax - self._xmin), np.abs(self._ymax - self._ymin)]))/20
+        self._circle_user = Circle(center, radius, color='r')
+        self._plot2dax.add_artist(self._circle_user)
+
+        # Start Plot Timer
         self._plot2dTimer.start()
 
     def Update2DPlot(self):
-        print(self._coordinatesFiltered)
+        self._circle_user.center = self._coordinatesFiltered[0], self._coordinatesFiltered[1]
+        self._plot2dax.draw_artist(self._circle_user)
+        self._plot2dax.figure.canvas.blit(self._plot2dax.bbox)
 
     def Stop2DPlot(self):
         widgetlist = [self.lineedit_xmin,
@@ -368,12 +380,12 @@ class MainWindow(QMainWindow):
 
     def SetPlotBorders(self):
         try:
-            xmin = float(self.lineedit_xmin.text())
-            xmax = float(self.lineedit_xmax.text())
-            ymin = float(self.lineedit_ymin.text())
-            ymax = float(self.lineedit_ymax.text())
-            self._plot2dax.set_xlim(xmin,xmax)
-            self._plot2dax.set_ylim(ymin,ymax)
+            self._xmin = float(self.lineedit_xmin.text())
+            self._xmax = float(self.lineedit_xmax.text())
+            self._ymin = float(self.lineedit_ymin.text())
+            self._ymax = float(self.lineedit_ymax.text())
+            self._plot2dax.set_xlim(self._xmin, self._xmax)
+            self._plot2dax.set_ylim(self._ymin, self._ymax)
             self._plot2dax.figure.canvas.draw()
             return 0
         except ValueError as err:
@@ -447,7 +459,7 @@ class MainWindow(QMainWindow):
             self.lbl_statusshmstream.setText(msg)
             return
         self._shmKey = sysv_ipc.ftok(self._shmFile, 255)
-        self._shm = sysv_ipc.SharedMemory(self._shmKey, sysv_ipc.IPC_CREX)
+        self._shm = sysv_ipc.SharedMemory(self._shmKey)
 
     def InitializeEmgTab(self):
         self.InitEmgSockets()

@@ -59,7 +59,8 @@ class Interval(object):
 
 def CoordinateToShm(memory):
     global index
-    coordinatebytes = np.array([np.single(x[index]), np.single(y[index])], dtype=np.single).tobytes()
+    coordinates = np.array([np.single(x[index]), np.single(y[index])], dtype=np.single)
+    coordinatebytes = coordinates.tobytes()
     memory.write(coordinatebytes)
     index = int(index + 1) % len(x)
 
