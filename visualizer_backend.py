@@ -140,6 +140,7 @@ class MainWindow(QMainWindow):
         super(MainWindow, self).__init__()
         self.showMaximized()
         uic.loadUi('visualizer_app.ui', self)
+        self.setWindowTitle("NMCHRL Visualizer")
 
         self.InitTabWidgetSlots()
         self.InitTwoDimPlotTab()
@@ -159,11 +160,9 @@ class MainWindow(QMainWindow):
         self.Init2DPlotTimer()
 
     def Init2DPlot(self):
-        circle1 = plt.Circle((0.5, 0.5), 0.05, color='r')
         self._plot2d = FigureCanvas(Figure(figsize=(10,10), tight_layout=True))
         self.horizontallayout_2d.insertWidget(2,self._plot2d)
         self._plot2dax = self._plot2d.figure.subplots()
-        self._plot2dax.add_artist(circle1)
 
     def Init2DPlotTimer(self):
         self._plot2dTimer = QtCore.QTimer()
@@ -290,6 +289,7 @@ class MainWindow(QMainWindow):
         self._SharedMemoryThread.SupplyFilteredData.connect(self.Update2DFilteredData)
         self._SharedMemoryThread.SupplyUnfilteredData.connect(self.Update2DUnfilteredData)
         self._SharedMemoryThread.StartTask()
+        self.lbl_statusshmstream.setText("Status: Connected")
 
 
     def DisconnectSharedMemory(self):
@@ -357,17 +357,22 @@ class MainWindow(QMainWindow):
         # Initialize Circle In Plot
         self._plot2dax.clear()
         center = ((self._xmax + self._xmin)/2, (self._ymax + self._ymin)/2)
-        radius = np.min(np.array([np.abs(self._xmax - self._xmin), np.abs(self._ymax - self._ymin)]))/20
-        self._circle_user = Circle(center, radius, color='r')
+        radius = 1/50
+        self._circle_user = Circle(center, radius, color='b')
         self._plot2dax.add_artist(self._circle_user)
+        print("Circle: {}".format(self._circle_user))
+        print("Axes.artists: {}".format(self._plot2dax.artists))
+        print("Axes.artists[0]: {}".format(self._plot2dax.artists[0]))
 
         # Start Plot Timer
         self._plot2dTimer.start()
 
     def Update2DPlot(self):
-        self._circle_user.center = self._coordinatesFiltered[0], self._coordinatesFiltered[1]
-        self._plot2dax.draw_artist(self._circle_user)
-        self._plot2dax.figure.canvas.blit(self._plot2dax.bbox)
+        x = (self._coordinatesFiltered[0] - self._xmin)/(self._xmax - self._xmin)
+        y = (self._coordinatesFiltered[1] - self._ymin)/(self._ymax - self._ymin)
+        self._circle_user.center = x,y
+        self._plot2dax.draw_artist(self._plot2dax.artists[0])
+        self._plot2dax.figure.canvas.update()
 
     def Stop2DPlot(self):
         widgetlist = [self.lineedit_xmin,
