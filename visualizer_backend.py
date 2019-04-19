@@ -342,9 +342,13 @@ class MainWindow(QMainWindow):
             self._SharedMemoryThread.SetFilter(self._filter)
 
     def Start2DPlot(self):
+        self._plot2dax.clear()
         res = self.SetPlotBorders()
         if (res == 1):
             return
+        self._plot2dax.figure.canvas.draw()
+        self._plot2dax_background = self._plot2dax.figure.canvas.copy_from_bbox(self._plot2dax.bbox)
+
 
         widgetlist = [self.lineedit_xmin,
                       self.lineedit_xmax,
@@ -355,22 +359,17 @@ class MainWindow(QMainWindow):
             widget.setEnabled(False)
 
         # Initialize Circle In Plot
-        self._plot2dax.clear()
         center = ((self._xmax + self._xmin)/2, (self._ymax + self._ymin)/2)
-        radius = 1/50
+        radius = self._plot2d_padding
         self._circle_user = Circle(center, radius, color='b')
         self._plot2dax.add_artist(self._circle_user)
-        print("Circle: {}".format(self._circle_user))
-        print("Axes.artists: {}".format(self._plot2dax.artists))
-        print("Axes.artists[0]: {}".format(self._plot2dax.artists[0]))
 
         # Start Plot Timer
         self._plot2dTimer.start()
 
     def Update2DPlot(self):
-        x = (self._coordinatesFiltered[0] - self._xmin)/(self._xmax - self._xmin)
-        y = (self._coordinatesFiltered[1] - self._ymin)/(self._ymax - self._ymin)
-        self._circle_user.center = x,y
+        self._circle_user.center = self._coordinatesFiltered[0], self._coordinatesFiltered[1]
+        self._plot2dax.figure.canvas.restore_region(self._plot2dax_background)
         self._plot2dax.draw_artist(self._plot2dax.artists[0])
         self._plot2dax.figure.canvas.update()
 
@@ -385,12 +384,23 @@ class MainWindow(QMainWindow):
 
     def SetPlotBorders(self):
         try:
-            self._xmin = float(self.lineedit_xmin.text())
-            self._xmax = float(self.lineedit_xmax.text())
-            self._ymin = float(self.lineedit_ymin.text())
-            self._ymax = float(self.lineedit_ymax.text())
-            self._plot2dax.set_xlim(self._xmin, self._xmax)
-            self._plot2dax.set_ylim(self._ymin, self._ymax)
+            xmin = float(self.lineedit_xmin.text())
+            xmax = float(self.lineedit_xmax.text())
+            ymin = float(self.lineedit_ymin.text())
+            ymax = float(self.lineedit_ymax.text())
+
+            width = np.abs(xmax - xmin)
+            height = np.abs(ymax - ymin)
+            padding = np.min([width, height])/20
+
+            self._plot2d_padding = padding
+            self._xmin = xmin
+            self._xmax = xmax
+            self._ymin = ymin
+            self._ymax = ymax
+
+            self._plot2dax.set_xlim(self._xmin-padding, self._xmax+padding)
+            self._plot2dax.set_ylim(self._ymin-padding, self._ymax+padding)
             self._plot2dax.figure.canvas.draw()
             return 0
         except ValueError as err:

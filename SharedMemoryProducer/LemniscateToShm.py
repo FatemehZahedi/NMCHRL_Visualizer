@@ -9,7 +9,7 @@ from threading import Timer
 index = 0
 a = 2
 b = 2*np.sqrt(2)
-freq = 0.25
+freq = 2
 T = np.linspace(0, 2*np.pi, int(1000/freq))
 
 x = list(map(lambda t: a*np.cos(t)/(1+np.sin(t)**2), T))
