@@ -5,82 +5,105 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <netdb.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
-
-#define PORT	 8080
-#define MAXLINE 1024
+#include <string>
+#include <iostream>
 
 
 class UDPServer{
 private:
 	std::string _addr;
-	int _port = 8080;
-	struct addrinfo _servaddr;
-	struct addrinfo * _pservaddr;
+	int _port;
+	struct sockaddr_in _servaddr;
+	struct sockaddr_in _cliaddr;
+	socklen_t _cliaddrlen;
 	int _sockfd;
 	const int _maxlen = 1024;
+	bool _connected = false;
 
 public:
-	UDPServer(int port);
-
+	UDPServer(std::string addr, int port);
+	std::string GetAddress();
+	int GetPort();
+	bool IsConnected() const;
+	void ConnectClient();
+	template<typename T>
+	void Send(T* data, int ndata);
 };
 
 UDPServer::UDPServer(std::string addr, int port): _port(port), _addr(addr){
-	// Reset and fill server address structs
-	memset(&_servaddr, 0, sizeof(_servaddr));
-	_servaddr.ai_family = AF_UNSPEC;
-	_servaddr.ai_socktype = SOCK_DGRAM;
-	_servaddr.ai_protocol = IPPROTO_UDP;
-	int res = getaddrinfo(addr.c_str(), port, &_servaddr, )
 
 	// Initialize socket
-	sockfd = socket(AF_INET, SOCK_DGRAM, 0);
-	if (sockfd < 0){
+	_sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+	if (_sockfd < 0){
 		perror("socket creation failed");
 		exit(EXIT_FAILURE);
 	}
 
+	// Reset and fill server address structs
+	memset(&_servaddr, 0, sizeof(_servaddr));
+	memset(&_cliaddr, 0, sizeof(_cliaddr));
+
+	_servaddr.sin_family = AF_INET;
+	_servaddr.sin_addr.s_addr = INADDR_ANY;
+	_servaddr.sin_port = htons(port);
+
 	// Bind the socket with the server address
-	if ( bind(sockfd, (const struct sockaddr *)&servaddr,
-	sizeof(servaddr)) < 0 )
+	if (bind(_sockfd, (const struct sockaddr *)&_servaddr,sizeof(_servaddr)) < 0)
 	{
 		perror("bind failed");
 		exit(EXIT_FAILURE);
 	}
 }
 
+std::string UDPServer::GetAddress(){
+	return _addr;
+}
+
+int UDPServer::GetPort(){
+	return _port;
+}
+
+bool UDPServer::IsConnected() const{
+	return _connected;
+}
+
+void UDPServer::ConnectClient(){
+	char buffer[_maxlen];
+	int n;
+	n = recvfrom(_sockfd, (char *)buffer, _maxlen,
+							 MSG_WAITALL, ( struct sockaddr *) &_cliaddr, &_cliaddrlen);
+	buffer[n] = '\0';
+	printf("Client: %s\n", buffer);
+	printf("Client Connected");
+}
+
+template<typename T>
+void UDPServer::Send(T* data, int ndata){
+	if (_connected){
+		sendto(_sockfd, (const T *) data, sizeof(data)*ndata,
+  				 MSG_DONTWAIT, (const struct sockaddr *) &_cliaddr, _cliaddrlen);
+	}
+}
+
 // Driver code
 int main() {
-	char buffer[MAXLINE];
-	char *hello = "Hello from server";
 
+	std::string addr;
+	int port;
 
-	int n;
-	socklen_t len;
+	std::cout << "Enter IP Address" << std::endl;
+	std::cin >> addr;
 
-	// printf("Before recvfrom client sockaddr_in\n");
-	// printf("sin_family: %i\n", cliaddr.sin_family);
-	// printf("sin_port: %i\n", cliaddr.sin_port);
-	// printf("sin_addr.s_addr: %i\n", cliaddr.sin_addr.s_addr);
-	// printf("sin_zero: %s\n", cliaddr.sin_zero);
-	n = recvfrom(sockfd, (char *)buffer, MAXLINE,
-				MSG_WAITALL, ( struct sockaddr *) &cliaddr,
-				&len);
-	buffer[n] = '\0';
+	std::cout << "Enter Port" << std::endl;
+	std::cin >> port;
 
-	// printf("After recvfrom client sockaddr_in\n");
-	// printf("sin_family: %i\n", cliaddr.sin_family);
-	// printf("sin_port: %i\n", cliaddr.sin_port);
-	// printf("sin_addr.s_addr: %i\n", cliaddr.sin_addr.s_addr);
-	// printf("sin_zero: %s\n", cliaddr.sin_zero);
-
-
-	printf("Client : %s\n", buffer);
-	sendto(sockfd, (const char *)hello, strlen(hello),
-		MSG_CONFIRM, (const struct sockaddr *) &cliaddr,
-			len);
-	printf("Hello message sent.\n");
+	double data[2] = {2.87, 3.14};
+	UDPServer server(addr, port);
+	server.ConnectClient();
+	server.Send(data, 2);
 
 	return 0;
 }
