@@ -19,22 +19,145 @@ from matplotlib.figure import Figure
 from matplotlib.backends.backend_qt5agg import FigureCanvas
 from matplotlib.patches import Circle
 import sysv_ipc
+import copy
+import select
+import re
 
-class TwoDimSharedMemoryConsumer(QThread):
+class IOConsumer(QObject):
+
+    SupplyConnectionState = pyqtSignal(bool)
+    SupplyStatusMessage = pyqtSignal(str)
+
+    # Default Data
+    _dataType = np.single               # default (single-precision float)
+    _dataTypeBytes = 4                  # default (single precision float is 4 bytes)
+    _nDataToReceive = 2                 # default (designed for x,y coordinates)
+    _data = np.zeros(_nDataToReceive, dtype=_dataType)
+
+    # Interface class for data io consumers
+    def __init__(self):
+        super().__init__()
+
+    def SetDataType(self, dtype, dtypeBytes):
+        self._dataType = dtype
+        self._dataTypeBytes = dtypeBytes
+
+    def SetNumDataToReceive(self, ndata):
+        self._nDataToReceive = ndata
+
+    def SetConnectionState(self, connectionState):
+        self._connected = connectionState
+        self.SupplyConnectionState.emit(connectionState)
+
+    def Connect(self):
+        pass
+
+    def GetData(self):
+        return self._data
+
+class SharedMemoryConsumer(IOConsumer):
+
+    _shmFile = ""
+    _shmKey = None
+    _shm = None
+
+    def __init__(self):
+        super().__init__()
+
+    def __del__(self):
+        try:
+            self._shm.detach()
+            sysv_ipc.remove_shared_memory(self._shm.id)
+        except:
+            pass
+        finally:
+            self.SetConnectionState(False)
+
+    def Connect(self, shmFile):
+        try:
+            if (shmFile == None):
+                msg = "Status: FD Not Chosen, Can't Connect"
+            else:
+                self._shmFile = shmFile
+                self._shmKey = sysv_ipc.ftok(self._shmFile, 255)
+                self._shm = sysv_ipc.SharedMemory(self._shmKey)
+                self.SetConnectionState(True)
+                msg = "Status: Shared Memory Connected"
+        except err:
+                msg = "Error: {}".format(err)
+        finally:
+            self.SupplyFilteredData.emit(msg)
+
+    def GetData(self):
+        try:
+            data_bytes = self._shm.read(self._nDataToReceive*self._dataTypeBytes)
+            self._data = np.frombuffer(data_bytes, dtype=self._dataType)
+            return copy.copy(self._data)
+        except:
+            self.SetConnectionState(False)
+
+class UDPClient(IOConsumer):
+
+    _addr = ""
+    _port = 0
+    _sockfd = None
+    _server_addr = None
+    _connected = False
+
+    def __init__(self):
+        # Create udp socket and connect to server
+        super().__init__()
+
+    def Connect(self, addr, port):
+        # Initialize server address/port and socket
+        self._addr = addr
+        self._port = port
+        self._sockfd = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self._server_addr = (self._addr, self._port)
+
+        # For server to know which client to send data to, it must receive a message
+        # from the client first. This will give the server the client's address/port info.
+        # Once the server gets this message, it will start sending data to the correct client (this one)
+        message = 'Hi Server'
+        sent = self._sockfd.sendto(bytes(message, 'utf-8'), self._server_addr)
+
+        # Check for response from server with select.select to determine if connection is established
+        ready = select.select([self._sockfd], [], [], 3.0)
+        if (ready[0]):
+            self.SetConnectionState(True)
+            threading.Thread(target=self.ReceiveForever, name="udp_receive_thread", daemon=False).start()
+        else:
+            self.SetConnectionState(False)
+
+    def ReceiveForever(self):
+        while(self._connected):
+            try:
+                ready = select.select([self._sockfd], [], [], 3.0)
+                if (ready[0]):
+                    data, server = self._sockfd.recvfrom(self._nDataToReceive*self._dataTypeBytes)
+                    self._data = np.frombuffer(data, dtype=self._dataType)
+                else:
+                    self.SetConnectionState(False)
+            except:
+                self.SetConnectionState(False)
+                self._sockfd.close()
+
+    def GetData(self):
+        return copy.copy(self._data)
+
+class DataProcessingThread(QThread):
+
+    _ioconsumer = IOConsumer()
 
     SupplyFilteredData = pyqtSignal(np.ndarray)
     SupplyUnfilteredData = pyqtSignal(np.ndarray)
 
-    def __init__(self, filterCoeffs, dtype, dtypeBytes, shm):
+    def __init__(self):
         # filterCoeffs is a list of 2 numpy arrays of Butterworth coefficients
         QThread.__init__(self)
         self._dataLenMax = 11
         self._dataUnfilt = np.zeros((2,self._dataLenMax))
         self._dataFilt = np.zeros((2,self._dataLenMax))
-        self.SetFilter(filterCoeffs)
-        self.SetDataType(dtype)
-        self.SetDataTypeBytes(dtypeBytes)
-        self.SetSharedMemory(shm)
         self._Timer = QtCore.QTimer()
         self._Timer.setInterval(1.0) # 1ms interval (1000Hz)
         self._Timer.timeout.connect(self.RunTask)
@@ -45,6 +168,9 @@ class TwoDimSharedMemoryConsumer(QThread):
         self._filterDen = np.zeros(self._dataLenMax)
         self._filterNum[0:len(filterCoeffs[0])] = filterCoeffs[0]
         self._filterDen[0:len(filterCoeffs[1])] = filterCoeffs[1]
+
+    def SetIOConsumer(self, ioconsumer):
+        self._ioconsumer = ioconsumer
 
     def ProcessData(self, newData):
         # Shift data array contents for new data
@@ -60,28 +186,15 @@ class TwoDimSharedMemoryConsumer(QThread):
         self._dataFilt[1,0] = (self._filterNum.dot(self._dataUnfilt[1,:]) -
                                self._filterDen[1:].dot(self._dataFilt[1,1:]))/self._filterDen[0]
 
-    def SetDataType(self, dtype):
-        self._dataType = dtype
-
-    def SetDataTypeBytes(self, dtypeBytes):
-        self._dataTypeBytes = dtypeBytes
-
-    def SetSharedMemory(self, shm):
-        self._shm = shm
-
-    def ReadSharedMemory(self):
-        nFloats = 2     #x and y coordinate
-        data_bytes = self._shm.read(nFloats*self._dataTypeBytes)
-        data_temp = np.frombuffer(data_bytes, dtype=self._dataType)
-        return data_temp
-
     def RunTask(self):
-        data_temp = self.ReadSharedMemory()
+        data_temp = self._ioconsumer.GetData()
         self.ProcessData(data_temp)
         self.SupplyFilteredData.emit(self._dataFilt[:,0])
         self.SupplyUnfilteredData.emit(self._dataUnfilt[:,0])
 
-    def StartTask(self):
+    def StartTask(self, ioconsumer, filter):
+        self.SetIOConsumer(ioconsumer)
+        self.SetFilter(filter)
         self._Timer.start()
 
     def StopTask(self):
@@ -134,7 +247,8 @@ class MainWindow(QMainWindow):
     _dataTypeBytes = None
     _shm = None
     _filter = None
-    _SharedMemoryThread = None
+    _DataProcessingThread = DataProcessingThread()
+    _ioconsumer = IOConsumer()
 
     def __init__(self):
         super(MainWindow, self).__init__()
@@ -154,10 +268,34 @@ class MainWindow(QMainWindow):
     def PrintTabName(self):
         print(self.tabWidget.currentWidget().objectName())
 
+    def Init2DDataProcessingThread(self):
+        self._DataProcessingThread = DataProcessingThread()
+        self._DataProcessingThread.SupplyFilteredData.connect(self.Update2DFilteredData)
+        self._DataProcessingThread.SupplyUnfilteredData.connect(self.Update2DUnfilteredData)
+
+    def InitIOConsumer(self):
+        self._ioconsumer = IOConsumer()
+        self._ioconsumer.SupplyConnectionState.connect(self.UpdateConnectionStatusLabel)
+        self._ioconsumer.SupplyStatusMessage.connect(self.PrintErrorFromDataProcessThread)
+
+    def UpdateConnectionStatusLabel(self, connectionState):
+        if (connectionState):
+            self.PrintTo2DDataStatusLabel("Status: Connected")
+        else:
+            self.PrintTo2DDataStatusLabel("Status: Disconnected")
+
+    def PrintErrorFromDataProcessThread(self, msg):
+       msgbox = QMessageBox()
+       msgbox.setIcon(QMessageBox.Information)
+       msgbox.setText(msg)
+       retval = msgbox.exec_()
+
     def InitTwoDimPlotTab(self):
         self.Init2DPlot()
         self.Init2DButtons()
         self.Init2DPlotTimer()
+        self.Init2DDataProcessingThread()
+        self.InitIOConsumer()
 
     def Init2DPlot(self):
         self._plot2d = FigureCanvas(Figure(figsize=(10,10), tight_layout=True))
@@ -189,6 +327,16 @@ class MainWindow(QMainWindow):
         self.rbtn_nofilter.setChecked(True)
         self.rbtn_nofilter.click()
 
+        # Create radiobutton group for filters and add buttons
+        self.rbtngroup_dataio2d = QButtonGroup()
+        self.rbtngroup_dataio2d.addButton(self.rbtn_udp)
+        self.rbtngroup_dataio2d.addButton(self.rbtn_shm)
+
+        # Connect radiobutton clicked signal to slot and set 'No Filter' as default button
+        self.rbtngroup_dataio2d.buttonClicked.connect(self.Set2DDataIOProtocol)
+        self.rbtn_udp.setChecked(True)
+        self.rbtn_udp.click()
+
         # Create radiobutton group for shm data io data types
         self.rbtngroup_datatype = QButtonGroup()
         self.rbtngroup_datatype.addButton(self.rbtn_int32_t)
@@ -204,16 +352,24 @@ class MainWindow(QMainWindow):
         self.rbtn_float32.click()
 
         # Connect Buttons to Start Shm Thread Task
-        self.btn_shmthreadstart.clicked.connect(self.StartShmThreadTask)
-        self.btn_shmthreadstop.clicked.connect(self.StopShmThreadTask)
+        self.btn_2ddatathreadstart.clicked.connect(self.Start2DDataThreadTask)
+        self.btn_2ddatathreadstop.clicked.connect(self.Stop2DDataThreadTask)
 
-    def StartShmThreadTask(self):
+    def Set2DDataIOProtocol(self, rbtn):
+        if (rbtn.objectName() == "rbtn_udp"):
+            self.groupbox_udp.setEnabled(True)
+            self.groupbox_shmfile.setEnabled(False)
+        elif (rbtn.objectName() == "rbtn_shm"):
+            self.groupbox_udp.setEnabled(False)
+            self.groupbox_shmfile.setEnabled(True)
+
+    def Start2DDataThreadTask(self):
 
         # Disable Buttons For Data IO Buttons
         widgetlist = [self.btn_selectshmfile,
                       self.btn_selectfilterfile,
                       self.btn_connect2ddata,
-                      self.btn_shmthreadstart]
+                      self.btn_2ddatathreadstart]
 
         for rbtn in self.rbtngroup_filter.buttons():
             if not rbtn.isChecked():
@@ -226,16 +382,16 @@ class MainWindow(QMainWindow):
         for widget in widgetlist:
             widget.setEnabled(False)
 
-        self.btn_shmthreadstop.setEnabled(True)
+        self.btn_2ddatathreadstop.setEnabled(True)
 
-        if (self._SharedMemoryThread is not None):
-            self._SharedMemoryThread.StartTask()
+        # Start Task
+        self._DataProcessingThread.StartTask(self._ioconsumer, self._filter)
 
-    def StopShmThreadTask(self):
+    def Stop2DDataThreadTask(self):
         widgetlist = [self.btn_selectshmfile,
                       self.btn_selectfilterfile,
                       self.btn_connect2ddata,
-                      self.btn_shmthreadstart]
+                      self.btn_2ddatathreadstart]
 
         for rbtn in self.rbtngroup_filter.buttons():
             rbtn.setEnabled(True)
@@ -246,10 +402,10 @@ class MainWindow(QMainWindow):
         for widget in widgetlist:
             widget.setEnabled(True)
 
-        self.btn_shmthreadstop.setEnabled(False)
+        self.btn_2ddatathreadstop.setEnabled(False)
 
-        if (self._SharedMemoryThread is not None):
-            self._SharedMemoryThread.StopTask()
+        # Stop Task
+        self._DataProcessingThread.StopTask()
 
     def Update2DFilteredData(self, data):
         self._coordinatesFiltered = data
@@ -259,41 +415,53 @@ class MainWindow(QMainWindow):
 
     def Connect2DData(self):
 
-        # Connect shared memory
-        self.ConnectSharedMemory()
+        # Check data type
+        if (self._dataType is None or self._dataTypeBytes is None):
+            self.PrintTo2DDataStatusLabel("Error: Choose Data Type")
 
-        # Check Dependencies for TwoDimSharedMemoryConsumer
-        msg = ""
-        dependenciesNotMet = False
-        if (self._dataType is None):
-            msg += "Data Type Not Set\n"
-            dependenciesNotMet = True
-        if (self._dataTypeBytes is None):
-            msg += "Data Type Bytes Not Set\n"
-            dependenciesNotMet = True
-        if (self._shm is None):
-            msg += "Shared Memory Not Set\n"
-            dependenciesNotMet = True
-        if (self._filter is None):
-            msg += "Filter Not Set"
-            dependenciesNotMet = True
-        if (dependenciesNotMet):
-            msgbox = QMessageBox(text=msg)
-            msgbox.exec_()
-            return
+        # Check Dependencies for IOConsumer objects
+        rbtn_name = self.rbtngroup_dataio2d.checkedButton().objectName()
 
-        self._SharedMemoryThread = TwoDimSharedMemoryConsumer(self._filter,
-                                                              self._dataType,
-                                                              self._dataTypeBytes,
-                                                              self._shm)
-        self._SharedMemoryThread.SupplyFilteredData.connect(self.Update2DFilteredData)
-        self._SharedMemoryThread.SupplyUnfilteredData.connect(self.Update2DUnfilteredData)
-        self._SharedMemoryThread.StartTask()
-        self.lbl_statusshmstream.setText("Status: Connected")
+        if (rbtn_name == "rbtn_udp"):
+            addr = self.lineedit_udpaddr.text()
+            port = self.lineedit_udpport.text()
+            # validate ip address
+            try:
+                socket.inet_aton(addr)
+            except:
+                self.PrintTo2DDataStatusLabel("Error: Invalid IPv4 Address")
+                return
+            # validate port
+            if (port.isdigit()):
+                port = int(port)
+                if (port < 0 or port > 65535):
+                    self.PrintTo2DDataStatusLabel("Error: Port Must Be Integer Between 0-65535")
+                    return
+            else:
+                self.PrintTo2DDataStatusLabel("Error: Port Must Be Integer Between 0-65535")
+                return
+            # validated
+            self._ioconsumer = UDPClient()
+            self._ioconsumer.SetDataType(self._dataType, self._dataTypeBytes)
+            self._ioconsumer.SupplyConnectionState.connect(self.UpdateConnectionStatusLabel)
+            self._ioconsumer.SupplyStatusMessage.connect(self.PrintErrorFromDataProcessThread)
+            self._ioconsumer.Connect(addr, port)
+        elif (rbtn_name == "rbtn_shm"):
+            # check for shared memory file descriptor
+            if (self._shmFile is None):
+                self.PrintTo2DDataStatusLabel("Error: Select Shared Memory FD")
+
+            # shared memory FD exists
+            self._ioconsumer = SharedMemoryConsumer()
+            self._ioconsumer.SetDataType(self._dataType, self._dataTypeBytes)
+            self._ioconsumer.SupplyConnectionState.connect(self.UpdateConnectionStatusLabel)
+            self._ioconsumer.SupplyStatusMessage.connect(self.PrintErrorFromDataProcessThread)
+            self._ioconsumer.Connect(self._shmFile)
 
 
-    def DisconnectSharedMemory(self):
-        sysv_ipc.remove_shared_memory(self._shm.id)
+    def PrintTo2DDataStatusLabel(self, msg):
+        self.lbl_status2ddataconnection.setText(msg)
+
 
     def SetButterworthCoeffsLabel(self, filterStr):
         coeffs = self._filterCoeffs[filterStr]
@@ -322,6 +490,7 @@ class MainWindow(QMainWindow):
         elif (btnname == "rbtn_float64"):
             self._dataType = np.double
             self._dataTypeBytes = 8 #bytes
+        self._ioconsumer.SetDataType(self._dataType, self._dataTypeBytes)
 
     def Set2DDataFilter(self, rbtn):
         # Change Butterworth Coefficient Labels
@@ -338,8 +507,7 @@ class MainWindow(QMainWindow):
         self._filter = self._filterCoeffs[filterStr]
 
         # Set filter in 2D shared memory thread
-        if (self._SharedMemoryThread is not None):
-            self._SharedMemoryThread.SetFilter(self._filter)
+        self._DataProcessingThread.SetFilter(self._filter)
 
     def Start2DPlot(self):
         self._plot2dax.clear()
@@ -415,7 +583,7 @@ class MainWindow(QMainWindow):
         options |= QFileDialog.DontUseNativeDialog
         filename, _ = QFileDialog.getOpenFileName(directory=os.getcwd(), options=options)
         self._shmFile = filename
-        self.lbl_shmfile.setText("FD: {}".format(self._shmFile))
+        self.lbl_shmfile.setText("{}".format(self._shmFile))
 
     def SelectFilterFile(self):
         #Open filedialog box
@@ -468,13 +636,7 @@ class MainWindow(QMainWindow):
         self.rbtn_customfilter.setChecked(True)
         self.rbtn_customfilter.click()
 
-    def ConnectSharedMemory(self):
-        if (self._shmFile == None):
-            msg = "Status: FD Not Chosen, Can't Connect"
-            self.lbl_statusshmstream.setText(msg)
-            return
-        self._shmKey = sysv_ipc.ftok(self._shmFile, 255)
-        self._shm = sysv_ipc.SharedMemory(self._shmKey)
+
 
     def InitializeEmgTab(self):
         self.InitEmgSockets()
