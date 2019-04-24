@@ -80,6 +80,7 @@ def main():
 
     # Interval Timer
     interval = Interval(0.001, CoordinateToShm, args=[shm]) #run every ms
+    print("shmfile: {}".format(shmfile))
     print("Starting Interval, press CTRL+C to stop.")
     interval.start()
 

@@ -76,22 +76,28 @@ class SharedMemoryConsumer(IOConsumer):
         super().__init__()
 
     def __del__(self):
-        self.Disconnect()
+        try:
+            self._shm.detach()
+            sysv_ipc.remove_shared_memory(self._shm.id)
+        except:
+            pass
 
     def Connect(self, shmFile):
         try:
             if (shmFile == None):
                 msg = "Status: FD Not Chosen, Can't Connect"
+                self.SetConnectionState(False)
             else:
                 self._shmFile = shmFile
                 self._shmKey = sysv_ipc.ftok(self._shmFile, 255)
                 self._shm = sysv_ipc.SharedMemory(self._shmKey)
                 self.SetConnectionState(True)
                 msg = "Status: Shared Memory Connected"
-        except err:
+        except Exception as err:
                 msg = "Error: {}".format(err)
+                self.SetConnectionState(False)
         finally:
-            self.SupplyFilteredData.emit(msg)
+            self.SupplyStatusMessage.emit(msg)
 
     def Disconnect(self):
         try:
@@ -128,8 +134,6 @@ class UDPClient(IOConsumer):
         # Create udp socket and connect to server
         super().__init__()
 
-    # def __del__(self):
-    #     self.Disconnect()
 
     def Connect(self, addr, port):
         # Initialize server address/port and socket
@@ -517,7 +521,7 @@ class MainWindow(QMainWindow):
             self._ioconsumer = SharedMemoryConsumer()
             self._ioconsumer.SetDataType(self._dataType, self._dataTypeBytes)
             self._ioconsumer.SupplyConnectionState.connect(self.UpdateConnectionStatus)
-            self._ioconsumer.SupplyStatusMessage.connect(self.PrintErrorFromDataProcessThread)
+            self._ioconsumer.SupplyStatusMessage.connect(self.PrintTo2DDataStatusLabel)
             self._ioconsumer.Connect(self._shmFile)
 
     def Disconnect2DData(self):
