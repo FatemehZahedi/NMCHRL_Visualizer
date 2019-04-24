@@ -8,11 +8,25 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 
-#define PORT	 8080
 #define MAXLINE 1024
 
 // Driver code
-int main() {
+int main(int argc, char * argv[]) {
+	if (argc != 3){
+		// error if incorrect command line arguments were inputted
+		printf("Command line arguments must be\n");
+		printf("1. IP address (of server) - ex: 192.168.0.100\n");
+		printf("2. port: - ex: 8080\n");
+		printf("\n\n Full example:   ./executable 192.168.0.100 8080\n");
+		exit(1);
+	}
+
+	// assign command line inputs to addr, port variables
+	char * addr = argv[1];
+	int port = atoi(argv[2]);
+	printf("Address: %s\n", addr);
+	printf("Port: %d\n", port);
+
 	int sockfd;
 	char buffer[MAXLINE];
 	char *hello = "Hello from client";
@@ -28,8 +42,9 @@ int main() {
 
 	// Filling server information
 	servaddr.sin_family = AF_INET;
-	servaddr.sin_port = htons(PORT);
-	servaddr.sin_addr.s_addr = INADDR_ANY;
+	servaddr.sin_port = htons(port);
+	// servaddr.sin_addr.s_addr = inet_addr(addr);
+	inet_pton(AF_INET, addr, &servaddr.sin_addr);
 
 	int n, len;
 
