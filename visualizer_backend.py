@@ -33,6 +33,7 @@ class IOConsumer(QObject):
     _dataTypeBytes = 4                  # default (single precision float is 4 bytes)
     _nDataToReceive = 2                 # default (designed for x,y coordinates)
     _data = np.zeros(_nDataToReceive, dtype=_dataType)
+    _connected = False
 
     # Interface class for data io consumers
     def __init__(self):
@@ -49,14 +50,24 @@ class IOConsumer(QObject):
         self._connected = connectionState
         self.SupplyConnectionState.emit(connectionState)
 
+    def IsConnected(self):
+        return self._connected
+
     def Connect(self):
+        pass
+
+    def Disconnect(self):
         pass
 
     def GetData(self):
         return self._data
 
 class SharedMemoryConsumer(IOConsumer):
+    # Signals
+    SupplyConnectionState = pyqtSignal(bool)
+    SupplyStatusMessage = pyqtSignal(str)
 
+    # Class Data
     _shmFile = ""
     _shmKey = None
     _shm = None
@@ -65,13 +76,7 @@ class SharedMemoryConsumer(IOConsumer):
         super().__init__()
 
     def __del__(self):
-        try:
-            self._shm.detach()
-            sysv_ipc.remove_shared_memory(self._shm.id)
-        except:
-            pass
-        finally:
-            self.SetConnectionState(False)
+        self.Disconnect()
 
     def Connect(self, shmFile):
         try:
@@ -88,6 +93,16 @@ class SharedMemoryConsumer(IOConsumer):
         finally:
             self.SupplyFilteredData.emit(msg)
 
+    def Disconnect(self):
+        try:
+            self._shm.detach()
+            sysv_ipc.remove_shared_memory(self._shm.id)
+        except:
+            pass
+        finally:
+            self.SetConnectionState(False)
+
+
     def GetData(self):
         try:
             data_bytes = self._shm.read(self._nDataToReceive*self._dataTypeBytes)
@@ -97,16 +112,24 @@ class SharedMemoryConsumer(IOConsumer):
             self.SetConnectionState(False)
 
 class UDPClient(IOConsumer):
+    # Signals
+    SupplyConnectionState = pyqtSignal(bool)
+    SupplyStatusMessage = pyqtSignal(str)
 
+    # Class Data
     _addr = ""
     _port = 0
     _sockfd = None
     _server_addr = None
     _connected = False
+    _udp_recv_thread_name = "udp_receive_thread"
 
     def __init__(self):
         # Create udp socket and connect to server
         super().__init__()
+
+    # def __del__(self):
+    #     self.Disconnect()
 
     def Connect(self, addr, port):
         # Initialize server address/port and socket
@@ -125,9 +148,12 @@ class UDPClient(IOConsumer):
         ready = select.select([self._sockfd], [], [], 3.0)
         if (ready[0]):
             self.SetConnectionState(True)
-            threading.Thread(target=self.ReceiveForever, name="udp_receive_thread", daemon=False).start()
+            threading.Thread(target=self.ReceiveForever, name=self._udp_recv_thread_name, daemon=True).start()
         else:
             self.SetConnectionState(False)
+
+    def Disconnect(self):
+        self.SetConnectionState(False) # ----> this will stop udp receive thread
 
     def ReceiveForever(self):
         while(self._connected):
@@ -136,6 +162,7 @@ class UDPClient(IOConsumer):
                 if (ready[0]):
                     data, server = self._sockfd.recvfrom(self._nDataToReceive*self._dataTypeBytes)
                     self._data = np.frombuffer(data, dtype=self._dataType)
+                    print(self._data)
                 else:
                     self.SetConnectionState(False)
             except:
@@ -275,14 +302,18 @@ class MainWindow(QMainWindow):
 
     def InitIOConsumer(self):
         self._ioconsumer = IOConsumer()
-        self._ioconsumer.SupplyConnectionState.connect(self.UpdateConnectionStatusLabel)
+        self._ioconsumer.SupplyConnectionState.connect(self.UpdateConnectionStatus)
         self._ioconsumer.SupplyStatusMessage.connect(self.PrintErrorFromDataProcessThread)
 
-    def UpdateConnectionStatusLabel(self, connectionState):
-        if (connectionState):
+    def UpdateConnectionStatus(self, connectionState):
+        if (connectionState):  # connected
             self.PrintTo2DDataStatusLabel("Status: Connected")
-        else:
+            self.btn_connect2ddata.setChecked(True)
+            self.btn_connect2ddata.setText("Disconnect")
+        else:                  # disconnected
             self.PrintTo2DDataStatusLabel("Status: Disconnected")
+            self.btn_connect2ddata.setChecked(False)
+            self.btn_connect2ddata.setText("Connect")
 
     def PrintErrorFromDataProcessThread(self, msg):
        msgbox = QMessageBox()
@@ -311,7 +342,7 @@ class MainWindow(QMainWindow):
     def Init2DButtons(self):
         # Connect Pushbutton Clicked Signals to Slots
         self.btn_selectshmfile.clicked.connect(self.SelectShmFile)
-        self.btn_connect2ddata.clicked.connect(self.Connect2DData)
+        self.btn_connect2ddata.toggled.connect(self.Handle2DConnection)
         self.btn_selectfilterfile.clicked.connect(self.SelectFilterFile)
         self.btn_2dplotstart.clicked.connect(self.Start2DPlot)
         self.btn_2dplotstop.clicked.connect(self.Stop2DPlot)
@@ -413,7 +444,17 @@ class MainWindow(QMainWindow):
     def Update2DUnfilteredData(self, data):
         self._coordinatesUnfiltered = data
 
+    def Handle2DConnection(self):
+        checked = self.btn_connect2ddata.isChecked()
+
+        if (checked): # pressed down
+            self.Connect2DData()
+        else:
+            self.Disconnect2DData()
+
     def Connect2DData(self):
+
+        print("2d data connected")
 
         # Check data type
         if (self._dataType is None or self._dataTypeBytes is None):
@@ -443,7 +484,7 @@ class MainWindow(QMainWindow):
             # validated
             self._ioconsumer = UDPClient()
             self._ioconsumer.SetDataType(self._dataType, self._dataTypeBytes)
-            self._ioconsumer.SupplyConnectionState.connect(self.UpdateConnectionStatusLabel)
+            self._ioconsumer.SupplyConnectionState.connect(self.UpdateConnectionStatus)
             self._ioconsumer.SupplyStatusMessage.connect(self.PrintErrorFromDataProcessThread)
             self._ioconsumer.Connect(addr, port)
         elif (rbtn_name == "rbtn_shm"):
@@ -454,10 +495,13 @@ class MainWindow(QMainWindow):
             # shared memory FD exists
             self._ioconsumer = SharedMemoryConsumer()
             self._ioconsumer.SetDataType(self._dataType, self._dataTypeBytes)
-            self._ioconsumer.SupplyConnectionState.connect(self.UpdateConnectionStatusLabel)
+            self._ioconsumer.SupplyConnectionState.connect(self.UpdateConnectionStatus)
             self._ioconsumer.SupplyStatusMessage.connect(self.PrintErrorFromDataProcessThread)
             self._ioconsumer.Connect(self._shmFile)
 
+    def Disconnect2DData(self):
+        print("2d data disconnected")
+        self._ioconsumer.Disconnect()
 
     def PrintTo2DDataStatusLabel(self, msg):
         self.lbl_status2ddataconnection.setText(msg)

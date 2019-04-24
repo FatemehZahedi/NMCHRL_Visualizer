@@ -244,6 +244,9 @@
                        <property name="text">
                         <string>Connect</string>
                        </property>
+                       <property name="checkable">
+                        <bool>true</bool>
+                       </property>
                       </widget>
                      </item>
                     </layout>
@@ -494,7 +497,7 @@
                          <widget class="QPushButton" name="btn_selectfilterfile">
                           <property name="maximumSize">
                            <size>
-                            <width>70</width>
+                            <width>50</width>
                             <height>16777215</height>
                            </size>
                           </property>
@@ -505,6 +508,9 @@
                           </property>
                           <property name="text">
                            <string>Choose</string>
+                          </property>
+                          <property name="checkable">
+                           <bool>false</bool>
                           </property>
                          </widget>
                         </item>
