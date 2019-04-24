@@ -162,7 +162,6 @@ class UDPClient(IOConsumer):
                 if (ready[0]):
                     data, server = self._sockfd.recvfrom(self._nDataToReceive*self._dataTypeBytes)
                     self._data = np.frombuffer(data, dtype=self._dataType)
-                    print(self._data)
                 else:
                     self.SetConnectionState(False)
             except:
@@ -178,6 +177,7 @@ class DataProcessingThread(QThread):
 
     SupplyFilteredData = pyqtSignal(np.ndarray)
     SupplyUnfilteredData = pyqtSignal(np.ndarray)
+    FilterProcessingErrorOccurred = pyqtSignal(str)
 
     def __init__(self):
         # filterCoeffs is a list of 2 numpy arrays of Butterworth coefficients
@@ -213,6 +213,13 @@ class DataProcessingThread(QThread):
         self._dataFilt[1,0] = (self._filterNum.dot(self._dataUnfilt[1,:]) -
                                self._filterDen[1:].dot(self._dataFilt[1,1:]))/self._filterDen[0]
 
+        # Make sure filtered data was not computed as nan
+        if (np.isnan(np.sum(self._dataFilt[:,0]))):
+            self.StopTask()
+            self._dataUnfilt = np.zeros((2,self._dataLenMax))
+            self._dataFilt = np.zeros((2,self._dataLenMax))
+            self.FilterProcessingErrorOccurred.emit("nan")
+
     def RunTask(self):
         data_temp = self._ioconsumer.GetData()
         self.ProcessData(data_temp)
@@ -220,6 +227,8 @@ class DataProcessingThread(QThread):
         self.SupplyUnfilteredData.emit(self._dataUnfilt[:,0])
 
     def StartTask(self, ioconsumer, filter):
+        self._dataUnfilt = np.zeros((2,self._dataLenMax))
+        self._dataFilt = np.zeros((2,self._dataLenMax))
         self.SetIOConsumer(ioconsumer)
         self.SetFilter(filter)
         self._Timer.start()
@@ -283,22 +292,16 @@ class MainWindow(QMainWindow):
         uic.loadUi('visualizer_app.ui', self)
         self.setWindowTitle("NMCHRL Visualizer")
 
-        self.InitTabWidgetSlots()
         self.InitTwoDimPlotTab()
-        self.InitializeEmgTab()
+        self.InitEmgTab()
 
         self.show()
-
-    def InitTabWidgetSlots(self):
-        self.tabWidget.currentChanged.connect(self.PrintTabName)
-
-    def PrintTabName(self):
-        print(self.tabWidget.currentWidget().objectName())
 
     def Init2DDataProcessingThread(self):
         self._DataProcessingThread = DataProcessingThread()
         self._DataProcessingThread.SupplyFilteredData.connect(self.Update2DFilteredData)
         self._DataProcessingThread.SupplyUnfilteredData.connect(self.Update2DUnfilteredData)
+        self._DataProcessingThread.FilterProcessingErrorOccurred.connect(self.HandleFilterProcessError)
 
     def InitIOConsumer(self):
         self._ioconsumer = IOConsumer()
@@ -308,12 +311,18 @@ class MainWindow(QMainWindow):
     def UpdateConnectionStatus(self, connectionState):
         if (connectionState):  # connected
             self.PrintTo2DDataStatusLabel("Status: Connected")
+            self.btn_connect2ddata.toggled.disconnect(self.Handle2DConnection)
             self.btn_connect2ddata.setChecked(True)
+            self.btn_connect2ddata.toggled.connect(self.Handle2DConnection)
             self.btn_connect2ddata.setText("Disconnect")
         else:                  # disconnected
             self.PrintTo2DDataStatusLabel("Status: Disconnected")
+            self.btn_connect2ddata.toggled.disconnect(self.Handle2DConnection)
             self.btn_connect2ddata.setChecked(False)
+            self.btn_connect2ddata.toggled.connect(self.Handle2DConnection)
             self.btn_connect2ddata.setText("Connect")
+            self.Stop2DDataThreadTask()
+            self.Stop2DPlot()
 
     def PrintErrorFromDataProcessThread(self, msg):
        msgbox = QMessageBox()
@@ -406,10 +415,6 @@ class MainWindow(QMainWindow):
             if not rbtn.isChecked():
                 rbtn.setEnabled(False)
 
-        for rbtn in self.rbtngroup_datatype.buttons():
-            if not rbtn.isChecked():
-                rbtn.setEnabled(False)
-
         for widget in widgetlist:
             widget.setEnabled(False)
 
@@ -427,8 +432,6 @@ class MainWindow(QMainWindow):
         for rbtn in self.rbtngroup_filter.buttons():
             rbtn.setEnabled(True)
 
-        for rbtn in self.rbtngroup_datatype.buttons():
-            rbtn.setEnabled(True)
 
         for widget in widgetlist:
             widget.setEnabled(True)
@@ -437,6 +440,13 @@ class MainWindow(QMainWindow):
 
         # Stop Task
         self._DataProcessingThread.StopTask()
+
+    def HandleFilterProcessError(self, errmsg):
+        if (errmsg == "nan"):
+            self.Stop2DDataThreadTask()
+            msg = "NaN was computed during filtering. Common Causes:\n  1. Incorrect Data Type Chosen\n 2. Unstable Filter Coefficients"
+            msgbox = QMessageBox(text=msg)
+            msgbox.exec_()
 
     def Update2DFilteredData(self, data):
         self._coordinatesFiltered = data
@@ -454,8 +464,6 @@ class MainWindow(QMainWindow):
 
     def Connect2DData(self):
 
-        print("2d data connected")
-
         # Check data type
         if (self._dataType is None or self._dataTypeBytes is None):
             self.PrintTo2DDataStatusLabel("Error: Choose Data Type")
@@ -471,15 +479,24 @@ class MainWindow(QMainWindow):
                 socket.inet_aton(addr)
             except:
                 self.PrintTo2DDataStatusLabel("Error: Invalid IPv4 Address")
+                self.btn_connect2ddata.toggled.disconnect(self.Handle2DConnection)
+                self.btn_connect2ddata.setChecked(False)
+                self.btn_connect2ddata.toggled.connect(self.Handle2DConnection)
                 return
             # validate port
             if (port.isdigit()):
                 port = int(port)
                 if (port < 0 or port > 65535):
                     self.PrintTo2DDataStatusLabel("Error: Port Must Be Integer Between 0-65535")
+                    self.btn_connect2ddata.toggled.disconnect(self.Handle2DConnection)
+                    self.btn_connect2ddata.setChecked(False)
+                    self.btn_connect2ddata.toggled.connect(self.Handle2DConnection)
                     return
             else:
                 self.PrintTo2DDataStatusLabel("Error: Port Must Be Integer Between 0-65535")
+                self.btn_connect2ddata.toggled.disconnect(self.Handle2DConnection)
+                self.btn_connect2ddata.setChecked(False)
+                self.btn_connect2ddata.toggled.connect(self.Handle2DConnection)
                 return
             # validated
             self._ioconsumer = UDPClient()
@@ -491,6 +508,10 @@ class MainWindow(QMainWindow):
             # check for shared memory file descriptor
             if (self._shmFile is None):
                 self.PrintTo2DDataStatusLabel("Error: Select Shared Memory FD")
+                self.btn_connect2ddata.toggled.disconnect(self.Handle2DConnection)
+                self.btn_connect2ddata.setChecked(False)
+                self.btn_connect2ddata.toggled.connect(self.Handle2DConnection)
+                return
 
             # shared memory FD exists
             self._ioconsumer = SharedMemoryConsumer()
@@ -500,7 +521,6 @@ class MainWindow(QMainWindow):
             self._ioconsumer.Connect(self._shmFile)
 
     def Disconnect2DData(self):
-        print("2d data disconnected")
         self._ioconsumer.Disconnect()
 
     def PrintTo2DDataStatusLabel(self, msg):
@@ -554,6 +574,8 @@ class MainWindow(QMainWindow):
         self._DataProcessingThread.SetFilter(self._filter)
 
     def Start2DPlot(self):
+
+        # Setup plot
         self._plot2dax.clear()
         res = self.SetPlotBorders()
         if (res == 1):
@@ -561,7 +583,7 @@ class MainWindow(QMainWindow):
         self._plot2dax.figure.canvas.draw()
         self._plot2dax_background = self._plot2dax.figure.canvas.copy_from_bbox(self._plot2dax.bbox)
 
-
+        # Disable/enable widgets
         widgetlist = [self.lineedit_xmin,
                       self.lineedit_xmax,
                       self.lineedit_ymin,
@@ -569,6 +591,9 @@ class MainWindow(QMainWindow):
 
         for widget in widgetlist:
             widget.setEnabled(False)
+
+        self.btn_2dplotstop.setEnabled(True)
+        self.btn_2dplotstart.setEnabled(False)
 
         # Initialize Circle In Plot
         center = ((self._xmax + self._xmin)/2, (self._ymax + self._ymin)/2)
@@ -579,23 +604,33 @@ class MainWindow(QMainWindow):
         # Start Plot Timer
         self._plot2dTimer.start()
 
+
+    def Stop2DPlot(self):
+        # Disable/enable widgets
+        widgetlist = [self.lineedit_xmin,
+        self.lineedit_xmax,
+        self.lineedit_ymin,
+        self.lineedit_ymax]
+
+        for widget in widgetlist:
+            widget.setEnabled(True)
+
+        self.btn_2dplotstop.setEnabled(False)
+        self.btn_2dplotstart.setEnabled(True)
+
+        # Stop Plot Timer
+        self._plot2dTimer.stop()
+
     def Update2DPlot(self):
         self._circle_user.center = self._coordinatesFiltered[0], self._coordinatesFiltered[1]
         self._plot2dax.figure.canvas.restore_region(self._plot2dax_background)
         self._plot2dax.draw_artist(self._plot2dax.artists[0])
         self._plot2dax.figure.canvas.update()
 
-    def Stop2DPlot(self):
-        widgetlist = [self.lineedit_xmin,
-                      self.lineedit_xmax,
-                      self.lineedit_ymin,
-                      self.lineedit_ymax]
-
-        for widget in widgetlist:
-            widget.setEnabled(True)
 
     def SetPlotBorders(self):
         try:
+            # Convert gui input to class data
             xmin = float(self.lineedit_xmin.text())
             xmax = float(self.lineedit_xmax.text())
             ymin = float(self.lineedit_ymin.text())
@@ -611,6 +646,20 @@ class MainWindow(QMainWindow):
             self._ymin = ymin
             self._ymax = ymax
 
+            # Check axis limits
+            if not (self._xmin < self._xmax):
+                msg = "X Min must be < X Max"
+                msgbox = QMessageBox(text=msg)
+                msgbox.exec_()
+                return 1
+
+            if not (self._ymin < self._ymax):
+                msg = "Y Min must be < Y Max"
+                msgbox = QMessageBox(text=msg)
+                msgbox.exec_()
+                return 1
+
+            # Set axis limits
             self._plot2dax.set_xlim(self._xmin-padding, self._xmax+padding)
             self._plot2dax.set_ylim(self._ymin-padding, self._ymax+padding)
             self._plot2dax.figure.canvas.draw()
@@ -682,7 +731,7 @@ class MainWindow(QMainWindow):
 
 
 
-    def InitializeEmgTab(self):
+    def InitEmgTab(self):
         self.InitEmgSockets()
         self.InitEmgButtons()
         self.InitEmgPlot()

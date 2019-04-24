@@ -662,6 +662,9 @@
                      </property>
                      <item row="0" column="0">
                       <widget class="QPushButton" name="btn_2ddatathreadstart">
+                       <property name="enabled">
+                        <bool>true</bool>
+                       </property>
                        <property name="font">
                         <font>
                          <pointsize>9</pointsize>
@@ -713,6 +716,9 @@
                   </property>
                   <item row="1" column="2">
                    <widget class="QPushButton" name="btn_2dplotstop">
+                    <property name="enabled">
+                     <bool>false</bool>
+                    </property>
                     <property name="font">
                      <font>
                       <pointsize>9</pointsize>
@@ -725,6 +731,9 @@
                   </item>
                   <item row="1" column="1">
                    <widget class="QPushButton" name="btn_2dplotstart">
+                    <property name="enabled">
+                     <bool>true</bool>
+                    </property>
                     <property name="font">
                      <font>
                       <pointsize>9</pointsize>
