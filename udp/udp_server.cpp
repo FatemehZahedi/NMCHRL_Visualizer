@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+#include <sys/select.h>
+#include <sys/time.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
@@ -12,6 +14,7 @@
 #include <iostream>
 #include <fstream>
 #include <vector>
+
 
 #define _USE_MATH_DEFINES
 #include <cmath>
@@ -38,8 +41,10 @@ private:
 	struct sockaddr_in _cliaddr;
 	socklen_t _cliaddrlen;
 	int _sockfd;
+    fd_set _readset;
 	const int _maxlen = 1024;
 	bool _connected = false;
+    struct timeval _select_timeout = {.tv_sec = 0, .tv_usec = 0};
 
 public:
 	UDPServer(std::string addr, int port);
@@ -47,6 +52,7 @@ public:
 	int GetPort();
 	bool IsConnected() const;
 	void ConnectClient();
+    void ReconnectIfNecessary();
 	template<typename T>
 	void Send(T* data, int ndata);
 };
@@ -74,6 +80,15 @@ UDPServer::UDPServer(std::string addr, int port): _port(port), _addr(addr){
 		perror("bind failed");
 		exit(EXIT_FAILURE);
 	}
+}
+
+void UDPServer::ReconnectIfNecessary(){
+    FD_ZERO(&_readset);
+    FD_SET(_sockfd, &_readset);
+    int ret = select(_sockfd+1, &_readset, NULL, NULL, &_select_timeout);
+    if (ret > 0){
+        ConnectClient();
+    }
 }
 
 std::string UDPServer::GetAddress(){
@@ -144,6 +159,7 @@ int main() {
 	while (1){
 		data[0] = x[i];
 		data[1] = y[i];
+        server.ReconnectIfNecessary();
 		server.Send(data, 2);
 		i = (i+1)%((int) n);
 		usleep(1000);
