@@ -23,6 +23,63 @@ import copy
 import select
 import re
 
+
+class ContractionLevelPlot(QObject):
+
+
+    def __init__(self):
+        super().__init__()
+
+        # Instantiate plot
+        self._plot = pg.PlotItem()                          # plot
+        self.SetPlotLimits(ymin=0, ymax=100)
+
+        # Line Pens
+        bounds_pen = pg.mkPen(style=Qt.SolidLine,           # pen for upper/lower bound lines
+                              width=3,
+                              color='k')
+        desired_pen = pg.mkPen(style=Qt.DashedLine,         # pen for desired line
+                               width=3,
+                               color='k')
+        self._meas_pens_oob = pg.mkPen(style=Qt.SolidLine,  # pen for measured line when out-of-bounds (oob)
+                                        width=3,
+                                        color='r')
+        self._meas_pen_ib = pg.mkPen(stype=Qt.SolidLine,    # pen for measured line when in bounds (ib)
+                                     width=3,
+                                     color='g')
+
+        # Lines
+        self._ub_line = pg.InfiniteLine(angle=0, pen=bounds_pen)            # upper bound line
+        self._lb_line = pg.InfiniteLine(angle=0, pen=bounds_pen)            # lower bound line
+        self._desired_line = pg.InfiniteLine(angle=0, pen=desired_pen)       # goal/target/setpoint line
+        self._meas_line = pg.InfiniteLine(angle=0, pen=self._meas_pens_ib)          # measured signal line
+
+        # Register lines with plot
+        self._plot.addItem(self._ub_line)
+        self._plot.addItem(self._lb_line)
+        self._plot.addItem(self._desired_line)
+        self._plot.addItem(self._meas_line)
+
+    def SetPlotLimits(self, ymin, ymax):
+        self._ymin = ymin
+        self._ymax = ymax
+        self._plot.setLimits(xMin=0,
+                            xMax=1,
+                            yMin=ymin,
+                            yMax=ymax,
+                            minXRange=1,
+                            maxXRange=1,
+                            minYRange=np.abs(ymax-ymin),
+                            maxYRange=np.abs(ymax-ymin))
+        self._plot.setMouseEnabled(False)
+
+    def SetDesiredLine(self, level):
+        self._desired_line.setValue(level)
+
+    def SetBoundLines(self, desiredLevel):
+        pass
+
+
 class IOConsumer(QObject):
 
     SupplyConnectionState = pyqtSignal(bool)
@@ -733,6 +790,8 @@ class MainWindow(QMainWindow):
         self.rbtn_customfilter.setChecked(True)
         self.rbtn_customfilter.click()
 
+    def InitContractionLevelPlots(self):
+        # Contraction Level Plots
 
 
     def InitEmgTab(self):
@@ -845,6 +904,36 @@ class MainWindow(QMainWindow):
         self.btn_plotstart.clicked.connect(self.StartEmgPlot)
         self.btn_plotstop.clicked.connect(self.StopEmgPlot)
 
+        # Send Text on Muscle Lineedits to MVC muscle labels
+        self.lineedit_emg1label.textChanged.connect(self.ChangeEmgMvcMuscleLabel)
+        self.lineedit_emg2label.textChanged.connect(self.ChangeEmgMvcMuscleLabel)
+        self.lineedit_emg3label.textChanged.connect(self.ChangeEmgMvcMuscleLabel)
+        self.lineedit_emg4label.textChanged.connect(self.ChangeEmgMvcMuscleLabel)
+        self.lineedit_emg5label.textChanged.connect(self.ChangeEmgMvcMuscleLabel)
+        self.lineedit_emg6label.textChanged.connect(self.ChangeEmgMvcMuscleLabel)
+        self.lineedit_emg7label.textChanged.connect(self.ChangeEmgMvcMuscleLabel)
+        self.lineedit_emg8label.textChanged.connect(self.ChangeEmgMvcMuscleLabel)
+
+    def ChangeEmgMvcMuscleLabel(self, txt):
+        lineedit_name = self.sender().objectName()
+        if (lineedit_name == "lineedit_emg1label"):
+            self.checkbox_emg1mvc.setText(txt)
+        elif (lineedit_name == "lineedit_emg2label"):
+            self.checkbox_emg2mvc.setText(txt)
+        elif (lineedit_name == "lineedit_emg3label"):
+            self.checkbox_emg3mvc.setText(txt)
+        elif (lineedit_name == "lineedit_emg4label"):
+            self.checkbox_emg4mvc.setText(txt)
+        elif (lineedit_name == "lineedit_emg5label"):
+            self.checkbox_emg5mvc.setText(txt)
+        elif (lineedit_name == "lineedit_emg6label"):
+            self.checkbox_emg6mvc.setText(txt)
+        elif (lineedit_name == "lineedit_emg7label"):
+            self.checkbox_emg7mvc.setText(txt)
+        elif (lineedit_name == "lineedit_emg8label"):
+            self.checkbox_emg8mvc.setText(txt)
+
+
     def EmgDataIoRbtnSlot(self, rbtn):
         rbtnname = rbtn.objectName()
         if (rbtnname == "rbtn_emgserver"):
@@ -878,6 +967,7 @@ class MainWindow(QMainWindow):
         self._activeEmgSensors = temp
 
     def InitEmgPlot(self):
+        # Large Plot on EMG Tab
         pg.setConfigOption('background', 'w')
         pg.setConfigOption('foreground', 'k')
         xAxisItem = pg.AxisItem(orientation='bottom', showValues=True)
@@ -895,7 +985,7 @@ class MainWindow(QMainWindow):
         [rows, cols] = data.shape
         self._plt.setRange(xRange=(0,rows*Ts), yRange=(-0.002,0.002), padding=0.0)
         self._plt.show()
-        self.horizontallayout_emg.addWidget(self._plotWidget)
+        self.horizontallayout_emg.insertWidget(1, self._plotWidget)
 
 
     def InitEmgLines(self):
