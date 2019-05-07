@@ -23,28 +23,32 @@ import copy
 import select
 import re
 
+# pyqtgraph global options -  white background, black foreground
+pg.setConfigOption('background', 'w')
+pg.setConfigOption('foreground', 'k')
+
 
 class ContractionLevelPlot(QObject):
 
+    _mvc = None
 
-    def __init__(self):
+    def __init__(self, title=None):
         super().__init__()
 
         # Instantiate plot
         self._plot = pg.PlotItem()                          # plot
-        self.SetPlotLimits(ymin=0, ymax=100)
 
         # Line Pens
-        bounds_pen = pg.mkPen(style=Qt.SolidLine,           # pen for upper/lower bound lines
+        bounds_pen = pg.mkPen(style=QtCore.Qt.SolidLine,           # pen for upper/lower bound lines
                               width=3,
                               color='k')
-        desired_pen = pg.mkPen(style=Qt.DashedLine,         # pen for desired line
+        desired_pen = pg.mkPen(style=QtCore.Qt.DashLine,         # pen for desired line
                                width=3,
                                color='k')
-        self._meas_pens_oob = pg.mkPen(style=Qt.SolidLine,  # pen for measured line when out-of-bounds (oob)
+        self._meas_pen_oob = pg.mkPen(style=QtCore.Qt.SolidLine,  # pen for measured line when out-of-bounds (oob)
                                         width=3,
                                         color='r')
-        self._meas_pen_ib = pg.mkPen(stype=Qt.SolidLine,    # pen for measured line when in bounds (ib)
+        self._meas_pen_ib = pg.mkPen(stype=QtCore.Qt.SolidLine,    # pen for measured line when in bounds (ib)
                                      width=3,
                                      color='g')
 
@@ -52,7 +56,7 @@ class ContractionLevelPlot(QObject):
         self._ub_line = pg.InfiniteLine(angle=0, pen=bounds_pen)            # upper bound line
         self._lb_line = pg.InfiniteLine(angle=0, pen=bounds_pen)            # lower bound line
         self._desired_line = pg.InfiniteLine(angle=0, pen=desired_pen)       # goal/target/setpoint line
-        self._meas_line = pg.InfiniteLine(angle=0, pen=self._meas_pens_ib)          # measured signal line
+        self._meas_line = pg.InfiniteLine(angle=0, pen=self._meas_pen_oob)          # measured signal line
 
         # Register lines with plot
         self._plot.addItem(self._ub_line)
@@ -60,25 +64,77 @@ class ContractionLevelPlot(QObject):
         self._plot.addItem(self._desired_line)
         self._plot.addItem(self._meas_line)
 
-    def SetPlotLimits(self, ymin, ymax):
-        self._ymin = ymin
+        # Hide x-axis
+        self._plot.hideAxis('bottom')
+
+        # Set Title
+        if (title is not None):
+            self.SetTitle(title)
+
+        # Run setup
+        self.SetupPlot(10)
+
+    def SetupPlot(self, targetMVCPercentage):
+        # calc and set plot limits
+        ymax = np.maximum(50, 1.5*targetMVCPercentage)
+        self.SetPlotLimits(ymax)
+
+        # set desired level line
+        self.SetDesiredLine(targetMVCPercentage)
+
+        # calc set upper/lower bound line
+        deviation = np.minimum(5, targetMVCPercentage/4)
+        self.SetBoundLines(targetMVCPercentage, deviation)
+
+        # set target line at 0
+        if (self._mvc is None):
+            self._mvc = 1
+            self.SetMeasuredLine(0)
+            self._mvc = None
+        else:
+            self.SetMeasuredLine(0)
+
+    def SetTitle(self, title_text):
+        self._plot.setTitle(title=title_text)
+
+    def SetMVC(self, mvc):
+        self._mvc = mvc
+
+    def SetPlotLimits(self, ymax):
+        # x-axis is always 0 to 1, its unimportant as this is really a 1D graph
+        # y-axis is a percent of mvc
+        self._ymin = 0
         self._ymax = ymax
+        range = np.abs(self._ymax - self._ymin)
         self._plot.setLimits(xMin=0,
                             xMax=1,
-                            yMin=ymin,
-                            yMax=ymax,
+                            yMin=self._ymin,
+                            yMax=self._ymax,
                             minXRange=1,
                             maxXRange=1,
-                            minYRange=np.abs(ymax-ymin),
-                            maxYRange=np.abs(ymax-ymin))
+                            minYRange=range,
+                            maxYRange=range)
         self._plot.setMouseEnabled(False)
 
     def SetDesiredLine(self, level):
         self._desired_line.setValue(level)
 
-    def SetBoundLines(self, desiredLevel):
-        pass
+    def SetBoundLines(self, desiredLevel, deviation):
+        self._ub_line.setValue(desiredLevel+deviation)
+        self._lb_line.setValue(desiredLevel-deviation)
 
+    def SetMeasuredLine(self, rawemgval):
+        # Convert to percent mvc
+        level = (rawemgval/self._mvc) * 100
+
+        # if level is above or below the y-axis limits, set to top or bottom
+        if (level>self._ymax):
+            level = self._ymax
+        elif (level<self._ymin):
+            level = self._ymin
+
+        # set measured line
+        self._meas_line.setValue(level)
 
 class IOConsumer(QObject):
 
@@ -118,6 +174,41 @@ class IOConsumer(QObject):
 
     def GetData(self):
         return self._data
+
+class EmgTcpClient(IOConsumer):
+
+    # Class Data
+    _addr = ""
+    _emgCommPort = 50040
+    _emgDataPort = 50041
+    _emgCommSockFd = None
+    _emgDataSockFd = None
+
+    def __init__(self):
+        super().__init__()
+
+    def Connect(self, addr):
+        # Initialize server address/port and socket
+        self._addr = addr
+        self._emgCommSockFd = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self._emgDataSockFd = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+        # Connect to TCP port.  Port 50040 is the communication port. Port 50041 is the data port
+        self._emgCommSockFd.connect((self._addr, self._emgCommPort))
+        self._emgDataSockFd.connect((self._addr, self._emgDataPort))
+
+    def SendEmgCommand(self, txt):
+        if len(txt) != 0:
+            txt += "\r\n\r\n"
+            bTxt = str.encode(txt)
+            self._emgCommSockFd.send(bTxt)
+
+    def Disconnect(self):
+        pass
+
+    def GetData(self):
+        pass
+
 
 class SharedMemoryConsumer(IOConsumer):
     # Signals
@@ -354,9 +445,29 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("NMCHRL Visualizer")
 
         self.InitTwoDimPlotTab()
+        self.InitContractionLevelPlots()
         self.InitEmgTab()
 
         self.show()
+
+    def InitContractionLevelPlots(self):
+        # put pyqtgraph GraphicsLayoutWidget in Contraction Level Area
+        self._cl_win = pg.GraphicsLayoutWidget()
+        self.layout_contractionlevels.addWidget(self._cl_win)
+
+        # emg sensor dictionary
+        self._emg_contraction_dict = {
+                                    'emg1': {'number': 1, 'mvc': 0, 'plot': ContractionLevelPlot('EMG 1'), 'active': False},
+                                    'emg2': {'number': 2, 'mvc': 0, 'plot': ContractionLevelPlot('EMG 2'), 'active': False},
+                                    'emg3': {'number': 3, 'mvc': 0, 'plot': ContractionLevelPlot('EMG 3'), 'active': False},
+                                    'emg4': {'number': 4, 'mvc': 0, 'plot': ContractionLevelPlot('EMG 4'), 'active': False},
+                                    'emg5': {'number': 5, 'mvc': 0, 'plot': ContractionLevelPlot('EMG 5'), 'active': False},
+                                    'emg6': {'number': 6, 'mvc': 0, 'plot': ContractionLevelPlot('EMG 6'), 'active': False},
+                                    'emg7': {'number': 7, 'mvc': 0, 'plot': ContractionLevelPlot('EMG 7'), 'active': False},
+                                    'emg8': {'number': 8, 'mvc': 0, 'plot': ContractionLevelPlot('EMG 8'), 'active': False}
+                                    }
+
+
 
     def Init2DDataProcessingThread(self):
         self._DataProcessingThread = DataProcessingThread()
@@ -790,10 +901,6 @@ class MainWindow(QMainWindow):
         self.rbtn_customfilter.setChecked(True)
         self.rbtn_customfilter.click()
 
-    def InitContractionLevelPlots(self):
-        # Contraction Level Plots
-
-
     def InitEmgTab(self):
         self.InitEmgSockets()
         self.InitEmgButtons()
@@ -815,9 +922,9 @@ class MainWindow(QMainWindow):
 
     def ConnectDataIO(self):
         if (self._emgDataSource == self._emgDataSourceDict['EMG_CLIENT']):
-            ip_address = str(self.lineedit_ipaddress.text())
+            ip_address = str(self.lineedit_emgipaddress.text())
             if (ip_address != ""):
-                self.lineedit_ipaddress.setText("")
+                self.lineedit_emgipaddress.setText("")
                 self.SetIPAddress(ip_address)
                 emgCommPortConnected = self.ConnectEmgCommPort()
                 emgDataPortConnected = self.ConnectEmgDataPort()
@@ -828,7 +935,7 @@ class MainWindow(QMainWindow):
                 if emgDataPortConnected:
                     self.StartDataReadThread()
                 msg = "Status: Connected\nIP: {}".format(self._ipAddressStr)
-            else: #lineedit_ipaddress empty
+            else: #lineedit_emgipaddress empty
                 msg = "Input An IP Address"
             self.PrintToStatusLabel(msg)
         elif (self._emgDataSource == self._emgDataSourceDict['EMG_IPC']):
@@ -877,13 +984,14 @@ class MainWindow(QMainWindow):
                            self.btn_emg8]
         # Add EMG Buttons to Layout
         for btn in self._emgSensors:
-            btn.toggled.connect(self.UpdateActiveEmgList)
+            btn.toggled.connect(self.HandleEmgPlotLine)
+            btn.toggled.connect(self.SetContractionLevelPlots)
 
         # Make Data IO Button Group
         self._emgServerWidgetList = [self.groupbox_emgserver,
                                      self.lbl_ip,
                                      self.lbl_serverterminal,
-                                     self.lineedit_ipaddress,
+                                     self.lineedit_emgipaddress,
                                      self.lineedit_servercmd,
                                      self.btn_sendservercmd,
                                      self.textedit_serverreplywindow]
@@ -913,9 +1021,24 @@ class MainWindow(QMainWindow):
         self.lineedit_emg6label.textChanged.connect(self.ChangeEmgMvcMuscleLabel)
         self.lineedit_emg7label.textChanged.connect(self.ChangeEmgMvcMuscleLabel)
         self.lineedit_emg8label.textChanged.connect(self.ChangeEmgMvcMuscleLabel)
+        self.lineedit_emg1label.textChanged.connect(self.ChangeContractionLevelPlotTitle)
+        self.lineedit_emg2label.textChanged.connect(self.ChangeContractionLevelPlotTitle)
+        self.lineedit_emg3label.textChanged.connect(self.ChangeContractionLevelPlotTitle)
+        self.lineedit_emg4label.textChanged.connect(self.ChangeContractionLevelPlotTitle)
+        self.lineedit_emg5label.textChanged.connect(self.ChangeContractionLevelPlotTitle)
+        self.lineedit_emg6label.textChanged.connect(self.ChangeContractionLevelPlotTitle)
+        self.lineedit_emg7label.textChanged.connect(self.ChangeContractionLevelPlotTitle)
+        self.lineedit_emg8label.textChanged.connect(self.ChangeContractionLevelPlotTitle)
 
     def ChangeEmgMvcMuscleLabel(self, txt):
         lineedit_name = self.sender().objectName()
+
+        # If txt is blank then put default text: EMG #
+        if (txt == ""):
+            emgNum = [int(s) for s in lineedit_name if s.isdigit()]
+            txt = "EMG {}".format(emgNum[0])
+
+        # Replace text
         if (lineedit_name == "lineedit_emg1label"):
             self.checkbox_emg1mvc.setText(txt)
         elif (lineedit_name == "lineedit_emg2label"):
@@ -933,6 +1056,15 @@ class MainWindow(QMainWindow):
         elif (lineedit_name == "lineedit_emg8label"):
             self.checkbox_emg8mvc.setText(txt)
 
+    def ChangeContractionLevelPlotTitle(self, txt):
+        lineedit_name = self.sender().objectName()
+        emgNum = [int(s) for s in lineedit_name if s.isdigit()]
+        emgName = "emg{}".format(emgNum[0])
+
+        if (txt == ""):
+            txt = "EMG {}".format(emgNum[0])
+
+        self._emg_contraction_dict[emgName]['plot'].SetTitle(txt)
 
     def EmgDataIoRbtnSlot(self, rbtn):
         rbtnname = rbtn.objectName()
@@ -957,7 +1089,7 @@ class MainWindow(QMainWindow):
     def PrintToEmgStatusLabel(self, msg):
         self.lbl_statusemgio.setText(msg)
 
-    def UpdateActiveEmgList(self):
+    def HandleEmgPlotLine(self):
         temp = []
         i = 1
         for btn in self._emgSensors:
@@ -966,10 +1098,40 @@ class MainWindow(QMainWindow):
             i += 1
         self._activeEmgSensors = temp
 
+    def SetContractionLevelPlots(self, checked):
+        # Add emg plot to contraction level graphics window
+        btn_name = str(self.sender().objectName()) #expected 'btn_emg1', 'btn_emg2', ... 'btn_emg8'
+        emg_name = btn_name.replace('btn_','')     #expected 'emg1', 'emg2', ..., 'emg8'
+
+        # update emg contraction dictionary
+        self._emg_contraction_dict[emg_name]['active'] = checked
+
+        # update contraction plot win
+        nActiveEMGs = 0
+        nCols = 2
+
+        # clear plot win
+        self._cl_win.clear()
+
+        # fill plot win
+        for emg in self._emg_contraction_dict:
+            if (self._emg_contraction_dict[emg]['active']):
+                r = int(nActiveEMGs / nCols)
+                c = int(nActiveEMGs) % nCols
+                self._cl_win.addItem(self._emg_contraction_dict[emg]['plot']._plot,
+                                     row=r,
+                                     col=c)
+                nActiveEMGs += 1
+
+        # special case.  if 2 plots active, make win a 2x1, not 1x2
+        if (nActiveEMGs ==2):
+            item = self._cl_win.getItem(0,1)
+            self._cl_win.removeItem(item)
+            self._cl_win.addItem(item, row=1, col=0)
+
+
     def InitEmgPlot(self):
         # Large Plot on EMG Tab
-        pg.setConfigOption('background', 'w')
-        pg.setConfigOption('foreground', 'k')
         xAxisItem = pg.AxisItem(orientation='bottom', showValues=True)
         yAxisItem = pg.AxisItem(orientation='left', showValues=True)
         self._plotWidget = pg.GraphicsLayoutWidget()
