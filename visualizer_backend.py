@@ -188,11 +188,10 @@ class EmgTcpClient(IOConsumer):
     _emgDataSockFd = None
     _nReadingsPerSample = 16
 
-    _dataLength = 100
+    _dataLength = 1000
     _data_raw = np.zeros((_nReadingsPerSample, _dataLength))   # raw data
     _data_hpf = np.zeros((_nReadingsPerSample, _dataLength))   # data after its been high pass filtered
-    _data_abs = np.zeros((_nReadingsPerSample, _dataLength))   # abs(_data_hpf)
-    _data_ma  = np.zeros((_nReadingsPerSample, _dataLength))   # 1/2 second moving avg of _data_abs
+    _data_ma  = np.zeros((_nReadingsPerSample, _dataLength))   # 1/2 second moving avg of abs(_data_hpf)
 
 
     def __init__(self):
@@ -202,8 +201,9 @@ class EmgTcpClient(IOConsumer):
         self.Fs = 2000  # sample freq
         n = 3           # butterworth filter order
         cutoff = 20     # cutoff freq
-        self.Fn = freq/2     # Nyquist freq`
+        self.Fn = self.Fs/2     # Nyquist freq`
         self.b, self.a = signal.butter(n, cutoff/self.Fn, 'high')
+        self.nCoeffs = len(self.a)
 
     def Connect(self, addr):
         # Initialize server address/port and socket
@@ -219,7 +219,6 @@ class EmgTcpClient(IOConsumer):
         except:
             self.SetConnectionState(False)
 
-    def ApplyFilter(self, data_new):
 
 
     def SendEmgCommand(self, txt):
@@ -249,7 +248,7 @@ class EmgTcpClient(IOConsumer):
                 if (nNewSamples > 0):
                     bEmgData = self._emgDataSockFd.recv(emgSampleLen*nNewSamples, 0)
                     emgData = np.frombuffer(bEmgData, dtype=np.single)
-                    emgData = np.reshape(emgData, (nNewSamples, nReadingsPerSample))
+                    emgData = np.reshape(emgData, (nNewSamples, nReadingsPerSample)).T    # will give [16xn] matrix where 'oldest' data is in the 0th column, 1st col is one sample newer, up to nth col which is newest
                     self.ApplyFilter(emgData)
 
             except ConnectionResetError:
@@ -257,6 +256,22 @@ class EmgTcpClient(IOConsumer):
                 self.SetConnectionState(False)
             except:
                 self.SetConnectionState(False)
+
+    def ApplyFilter(self, data_new):
+
+        nReadings, nSamples = data_new.shape
+        for iSample in range(0, nSamples):
+            # shift data
+            self._data_raw[:,1:] = self._data_raw[:,0:-1]
+            self._data_hpf[:,1:] = self._data_hpf[:,0:-1]
+            self._data_ma[:,1:]  = self._data_ma[:,0:-1]
+
+            # insert new data into _data_raw, then apply high pass filter
+            self._data_raw[:,0] = data_new[:,iSample]
+            self._data_hpf[:,0] = ( self._data_raw[:,0:self.nCoeffs].dot(self.b) -
+                                    self._data_hpf[:,1:self.nCoeffs].dot(self.a[1:]) )/self.a[0]
+            self._data_ma[:,0] = np.mean(np.abs(self._data_hpf[:,0:self.Fs/2]), axis=1)
+
 
     def Disconnect(self):
         pass
