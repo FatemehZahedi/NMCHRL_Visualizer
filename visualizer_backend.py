@@ -22,6 +22,7 @@ import sysv_ipc
 import copy
 import select
 import re
+from scipy import signal
 
 # pyqtgraph global options -  white background, black foreground
 pg.setConfigOption('background', 'w')
@@ -177,31 +178,85 @@ class IOConsumer(QObject):
 
 class EmgTcpClient(IOConsumer):
 
+    SupplyEmgServerMsg = pyqtSignal(str)
+
     # Class Data
     _addr = ""
     _emgCommPort = 50040
     _emgDataPort = 50041
     _emgCommSockFd = None
     _emgDataSockFd = None
+    _nReadingsPerSample = 16
+
+    _dataLength = 100
+    _data_raw = np.zeros((_nReadingsPerSample, _dataLength))   # raw data
+    _data_hpf = np.zeros((_nReadingsPerSample, _dataLength))   # data after its been high pass filtered
+    _data_abs = np.zeros((_nReadingsPerSample, _dataLength))   # abs(_data_hpf)
+    _data_ma  = np.zeros((_nReadingsPerSample, _dataLength))   # 1/2 second moving avg of _data_abs
+
 
     def __init__(self):
         super().__init__()
 
+        # initialize high pass butterworth filter
+        self.Fs = 2000  # sample freq
+        n = 3           # butterworth filter order
+        cutoff = 20     # cutoff freq
+        self.Fn = freq/2     # Nyquist freq`
+        self.b, self.a = signal.butter(n, cutoff/self.Fn, 'high')
+
     def Connect(self, addr):
         # Initialize server address/port and socket
-        self._addr = addr
-        self._emgCommSockFd = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self._emgDataSockFd = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            self._addr = addr
+            self._emgCommSockFd = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self._emgDataSockFd = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-        # Connect to TCP port.  Port 50040 is the communication port. Port 50041 is the data port
-        self._emgCommSockFd.connect((self._addr, self._emgCommPort))
-        self._emgDataSockFd.connect((self._addr, self._emgDataPort))
+            # Connect to TCP port.  Port 50040 is the communication port. Port 50041 is the data port
+            self._emgCommSockFd.connect((self._addr, self._emgCommPort))
+            self._emgDataSockFd.connect((self._addr, self._emgDataPort))
+            self.SetConnectionState(True)
+        except:
+            self.SetConnectionState(False)
+
+    def ApplyFilter(self, data_new):
+
 
     def SendEmgCommand(self, txt):
         if len(txt) != 0:
             txt += "\r\n\r\n"
             bTxt = str.encode(txt)
             self._emgCommSockFd.send(bTxt)
+
+    def ReceiveForever(self):
+
+        # One sample from the Delsys Trigno system will give 16 - 4 byte (single precision float) readings
+        # Therefore, anytime we receive data, we will want to read it in 64 bytes at a time
+        emgSampleLen = 64
+        nReadingsPerSample = 16
+        while (self._connected):
+            try:
+                # Receive from Comm Port
+                receivedMessage = select.select([self._emgCommSockFd], [], [])
+                if (receivedMessage[0]):
+                    bEmgResponse = self._emgCommSocket.recv(256, 0)
+                    emgResponse = bEmgResponse.decode()
+                    self.SupplyEmgServerMsg.emit(emgResponse)
+
+                # Receive from Data Port
+                msgLen = len(self._emgDataSockFd.recv(1024, socket.MSG_PEEK))
+                nNewSamples = int(msgLen/emgSampleLen)
+                if (nNewSamples > 0):
+                    bEmgData = self._emgDataSockFd.recv(emgSampleLen*nNewSamples, 0)
+                    emgData = np.frombuffer(bEmgData, dtype=np.single)
+                    emgData = np.reshape(emgData, (nNewSamples, nReadingsPerSample))
+                    self.ApplyFilter(emgData)
+
+            except ConnectionResetError:
+                self.SupplyStatusMessage("Status: Disconnected\nDelsys Base Reset")
+                self.SetConnectionState(False)
+            except:
+                self.SetConnectionState(False)
 
     def Disconnect(self):
         pass
@@ -902,76 +957,11 @@ class MainWindow(QMainWindow):
         self.rbtn_customfilter.click()
 
     def InitEmgTab(self):
-        self.InitEmgSockets()
         self.InitEmgButtons()
         self.InitEmgPlot()
         self.InitEmgLines()
         self.InitEmgPlotTimer()
 
-    def InitEmgSockets(self):
-        # Set socket timeouts
-        self._emgCommSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self._emgDataSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self._emgCommSocket.settimeout(self._socketTimeout)
-        self._emgDataSocket.settimeout(self._socketTimeout)
-
-        # Fill emg data queue with zeros
-        temp = np.zeros(16)
-        for i in range(0,5000):
-            self._emgDataQueue.append(temp)
-
-    def ConnectDataIO(self):
-        if (self._emgDataSource == self._emgDataSourceDict['EMG_CLIENT']):
-            ip_address = str(self.lineedit_emgipaddress.text())
-            if (ip_address != ""):
-                self.lineedit_emgipaddress.setText("")
-                self.SetIPAddress(ip_address)
-                emgCommPortConnected = self.ConnectEmgCommPort()
-                emgDataPortConnected = self.ConnectEmgDataPort()
-
-                # Start Threads for Reading EMG Communication and Data ports continuously
-                if emgCommPortConnected:
-                    self.StartCommReadThread()
-                if emgDataPortConnected:
-                    self.StartDataReadThread()
-                msg = "Status: Connected\nIP: {}".format(self._ipAddressStr)
-            else: #lineedit_emgipaddress empty
-                msg = "Input An IP Address"
-            self.PrintToStatusLabel(msg)
-        elif (self._emgDataSource == self._emgDataSourceDict['EMG_IPC']):
-            pass
-
-    def StartCommReadThread(self):
-        # Stop EMG Comm Thread if its open
-        self.StopCommReadThread()
-
-        # Start EMG Comm Thread
-        t = threading.Thread(target=self.ReadEmgCommForever, name=self._threadname_emgcommrecv, daemon=True)
-        t.start()
-
-    def StopCommReadThread(self):
-        activeThreads = threading.enumerate() # returns list of active threads
-
-        for t in activeThreads:
-            if (t.name == self._threadname_emgcommrecv):
-                self._emgCommThreadActive = False # this will force an end of the method the thread is running
-                break
-
-    def StartDataReadThread(self):
-        # Stop EMG Data Thread if its open
-        self.StopDataReadThread()
-
-        # Start EMG Data Thread
-        t = threading.Thread(target=self.ReadEmgDataForever, name=self._threadname_emgdatarecv, daemon=True)
-        t.start()
-
-    def StopDataReadThread(self):
-        activeThreads = threading.enumerate() # returns list of active threads
-
-        for t in activeThreads:
-            if (t.name == self._threadname_emgdatarecv):
-                self._emgDataThreadActive = False # this will force an end of the method the thread is running
-                break
 
     def InitEmgButtons(self):
         self._emgSensors = [self.btn_emg1,
@@ -995,20 +985,10 @@ class MainWindow(QMainWindow):
                                      self.lineedit_servercmd,
                                      self.btn_sendservercmd,
                                      self.textedit_serverreplywindow]
-        self._emgIpcWidgetList = [self.groupbox_emgipc,
-                                  self.btn_choosemqfd,
-                                  self.lbl_mqfd]
-
-        self.emgdataio_rbtngroup = QButtonGroup()
-        self.emgdataio_rbtngroup.addButton(self.rbtn_emgserver)
-        self.emgdataio_rbtngroup.addButton(self.rbtn_emgipc)
-        self.emgdataio_rbtngroup.buttonClicked.connect(self.EmgDataIoRbtnSlot)
-        self.rbtn_emgserver.setChecked(True)
-        self.rbtn_emgserver.click()
 
         # Activate/Deactivate EMGs
-        self.btn_connectemgio.clicked.connect(self.ConnectDataIO)
-        self.btn_sendservercmd.clicked.connect(self.SendEmgCommand)
+        # self.btn_connectemgio.clicked.connect(self.ConnectDataIO)
+        # self.btn_sendservercmd.clicked.connect(self.SendEmgCommand)
         self.btn_plotstart.clicked.connect(self.StartEmgPlot)
         self.btn_plotstop.clicked.connect(self.StopEmgPlot)
 
@@ -1066,25 +1046,6 @@ class MainWindow(QMainWindow):
 
         self._emg_contraction_dict[emgName]['plot'].SetTitle(txt)
 
-    def EmgDataIoRbtnSlot(self, rbtn):
-        rbtnname = rbtn.objectName()
-        if (rbtnname == "rbtn_emgserver"):
-            for widget in self._emgIpcWidgetList:
-                widget.setEnabled(False)
-            for widget in self._emgServerWidgetList:
-                widget.setEnabled(True)
-            self._emgDataSource = self._emgDataSourceDict['EMG_CLIENT']
-        elif (rbtnname == "rbtn_emgipc"):
-            for widget in self._emgIpcWidgetList:
-                widget.setEnabled(True)
-            for widget in self._emgServerWidgetList:
-                widget.setEnabled(False)
-            self.StopCommReadThread()
-            self.StopDataReadThread()
-            self._emgDataSource = self._emgDataSourceDict['EMG_IPC']
-            # self.PrintToEmgStatusLabel("Status: Disconnected")
-        else:
-            print("Neither button was chosen...")
 
     def PrintToEmgStatusLabel(self, msg):
         self.lbl_statusemgio.setText(msg)
@@ -1144,7 +1105,7 @@ class MainWindow(QMainWindow):
         data = np.array(self._emgDataQueue)
         emgSamplesPerSec = 2000
         Ts = 1.0/emgSamplesPerSec
-        [rows, cols] = data.shape
+        rows = 5000
         self._plt.setRange(xRange=(0,rows*Ts), yRange=(-0.002,0.002), padding=0.0)
         self._plt.show()
         self.horizontallayout_emg.insertWidget(1, self._plotWidget)
@@ -1211,86 +1172,7 @@ class MainWindow(QMainWindow):
         # Update Plot Ranges and Re-plot
         self._plt.update()
 
-    def CloseSockets(self):
-        #Close sockets
-        self._emgCommSocket.close()
-        self._emgDataSocket.close()
 
-    def SetIPAddress(self, ip_address):
-        self._ipAddressStr = ip_address
-
-    def ConnectEmgCommPort(self):
-        try:
-            self._emgCommSocket.connect((self._ipAddressStr, self._emgCommPort))
-            return True #return normally
-        except socket.timeout:
-            errmsg = "Timeout Occured During Attempt\nto Connect to Comm Port"
-            self.PrintToStatusLabel(errmsg)
-            return False #return with error
-
-    def ConnectEmgDataPort(self):
-        try:
-            self._emgDataSocket.connect((self._ipAddressStr, self._emgDataPort))
-            return True #return normally
-        except socket.timeout:
-            errmsg = "Timeout Occured During Attempt\nto Connect to Data Port"
-            self.PrintToStatusLabel(errmsg)
-            return False #return with error
-
-    def ReadEmgCommForever(self):
-        self._emgCommSocket.setblocking(False)
-
-        bEmgResponse = ""
-        emgResponse = ""
-        self._emgCommThreadActive = True
-        while (self._emgCommThreadActive):
-            try:
-                # Check for bytes available
-                bytesAvailable = len(self._emgCommSocket.recv(256, socket.MSG_PEEK))
-                # If bytes are available, that means the server response has arrived.
-                # Get emg server response, change from byte string to string. Then
-                # append it to the textedit widget
-                if (bytesAvailable >= 0):
-                    bEmgResponse = self._emgCommSocket.recv(256, 0)
-                    emgResponse = bEmgResponse.decode()
-                    self._textedit_emgserverreplywindow.append(emgResponse)
-                    bEmgResponse = ""
-                    emgResponse = ""
-                else:
-                    time.sleep(0.1)
-            except BlockingIOError:
-                time.sleep(0.1)
-            except ConnectionResetError:
-                self.PrintToStatusLabel("Status: Disconnected\nDelsys Base Reset")
-                break
-
-    def ReadEmgDataForever(self):
-        self._emgDataSocket.setblocking(False)
-
-        SZ_DATA_EMG = 64 #take data in 64 byte segments
-        self._emgDataThreadActive = True
-        while (self._emgDataThreadActive):
-            try:
-                if (len(self._emgDataSocket.recv(SZ_DATA_EMG, socket.MSG_PEEK)) >= SZ_DATA_EMG):
-                    bEmgData = self._emgDataSocket.recv(SZ_DATA_EMG, 0) # get 64 bytes of data
-                    emgData = np.frombuffer(bEmgData, dtype=np.single)
-                    self._emgDataQueue.append(emgData)
-            except BlockingIOError:
-                continue
-            except ConnectionResetError:
-                self.PrintToStatusLabel("Status: Disconnected\nDelsys Base Reset")
-                break
-
-    def PrintToStatusLabel(self, msg):
-        self._lbl_statusemgio.setText(msg)
-
-    def SendEmgCommand(self):
-        commandStr = str(self._lineedit_servercmd.text())
-        self._lineedit_servercmd.setText("")
-        if len(commandStr) != 0:
-            commandStr += "\r\n\r\n"
-            bCommandStr = str.encode(commandStr)
-            self._emgCommSocket.send(bCommandStr)
 
 
 if __name__ == '__main__':

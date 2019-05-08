@@ -1009,71 +1009,7 @@
                   <property name="bottomMargin">
                    <number>2</number>
                   </property>
-                  <item row="1" column="3" colspan="2">
-                   <widget class="QGroupBox" name="groupbox_emgipc">
-                    <property name="title">
-                     <string>IPC I/O (Message Queue)</string>
-                    </property>
-                    <layout class="QGridLayout" name="gridLayout_5">
-                     <property name="leftMargin">
-                      <number>2</number>
-                     </property>
-                     <property name="topMargin">
-                      <number>2</number>
-                     </property>
-                     <property name="rightMargin">
-                      <number>2</number>
-                     </property>
-                     <property name="bottomMargin">
-                      <number>2</number>
-                     </property>
-                     <item row="0" column="1">
-                      <widget class="QLabel" name="lbl_mqfd">
-                       <property name="font">
-                        <font>
-                         <pointsize>9</pointsize>
-                        </font>
-                       </property>
-                       <property name="text">
-                        <string>FD: </string>
-                       </property>
-                      </widget>
-                     </item>
-                     <item row="0" column="0">
-                      <widget class="QPushButton" name="btn_choosemqfd">
-                       <property name="maximumSize">
-                        <size>
-                         <width>65</width>
-                         <height>16777215</height>
-                        </size>
-                       </property>
-                       <property name="font">
-                        <font>
-                         <pointsize>9</pointsize>
-                        </font>
-                       </property>
-                       <property name="text">
-                        <string>Choose</string>
-                       </property>
-                      </widget>
-                     </item>
-                    </layout>
-                   </widget>
-                  </item>
-                  <item row="0" column="0">
-                   <widget class="QRadioButton" name="rbtn_emgserver">
-                    <property name="maximumSize">
-                     <size>
-                      <width>15</width>
-                      <height>16777215</height>
-                     </size>
-                    </property>
-                    <property name="text">
-                     <string/>
-                    </property>
-                   </widget>
-                  </item>
-                  <item row="0" column="3" colspan="2">
+                  <item row="0" column="2" colspan="2">
                    <widget class="QGroupBox" name="groupbox_emgserver">
                     <property name="title">
                      <string>EMG Server</string>
@@ -1094,25 +1030,7 @@
                      <property name="spacing">
                       <number>2</number>
                      </property>
-                     <item row="0" column="2" colspan="3">
-                      <widget class="QLineEdit" name="lineedit_ipaddress">
-                       <property name="font">
-                        <font>
-                         <pointsize>9</pointsize>
-                        </font>
-                       </property>
-                       <property name="text">
-                        <string/>
-                       </property>
-                       <property name="alignment">
-                        <set>Qt::AlignCenter</set>
-                       </property>
-                       <property name="placeholderText">
-                        <string>EMG Server IP Address</string>
-                       </property>
-                      </widget>
-                     </item>
-                     <item row="3" column="4">
+                     <item row="3" column="6">
                       <widget class="QPushButton" name="btn_sendservercmd">
                        <property name="font">
                         <font>
@@ -1142,31 +1060,7 @@
                        </property>
                       </widget>
                      </item>
-                     <item row="2" column="2" colspan="2">
-                      <widget class="QLabel" name="lbl_serverterminal">
-                       <property name="font">
-                        <font>
-                         <pointsize>9</pointsize>
-                        </font>
-                       </property>
-                       <property name="text">
-                        <string>Server Terminal</string>
-                       </property>
-                      </widget>
-                     </item>
-                     <item row="3" column="2" colspan="2">
-                      <widget class="QLineEdit" name="lineedit_servercmd">
-                       <property name="font">
-                        <font>
-                         <pointsize>9</pointsize>
-                        </font>
-                       </property>
-                       <property name="placeholderText">
-                        <string>EMG Server Command</string>
-                       </property>
-                      </widget>
-                     </item>
-                     <item row="4" column="2" colspan="3">
+                     <item row="4" column="1" colspan="6">
                       <widget class="QTextEdit" name="textedit_serverreplywindow">
                        <property name="minimumSize">
                         <size>
@@ -1190,41 +1084,70 @@
                        </property>
                       </widget>
                      </item>
+                     <item row="2" column="1" colspan="5">
+                      <widget class="QLabel" name="lbl_serverterminal">
+                       <property name="font">
+                        <font>
+                         <pointsize>9</pointsize>
+                        </font>
+                       </property>
+                       <property name="text">
+                        <string>Server Terminal</string>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="0" column="6">
+                      <widget class="QPushButton" name="btn_connectemgio">
+                       <property name="maximumSize">
+                        <size>
+                         <width>75</width>
+                         <height>16777215</height>
+                        </size>
+                       </property>
+                       <property name="font">
+                        <font>
+                         <pointsize>9</pointsize>
+                        </font>
+                       </property>
+                       <property name="text">
+                        <string>Connect</string>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="3" column="1" colspan="5">
+                      <widget class="QLineEdit" name="lineedit_servercmd">
+                       <property name="font">
+                        <font>
+                         <pointsize>9</pointsize>
+                        </font>
+                       </property>
+                       <property name="placeholderText">
+                        <string>EMG Server Command</string>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="0" column="2" colspan="4">
+                      <widget class="QLineEdit" name="lineedit_emgipaddress">
+                       <property name="font">
+                        <font>
+                         <pointsize>9</pointsize>
+                        </font>
+                       </property>
+                       <property name="text">
+                        <string/>
+                       </property>
+                       <property name="alignment">
+                        <set>Qt::AlignCenter</set>
+                       </property>
+                       <property name="placeholderText">
+                        <string>EMG Server IP Address</string>
+                       </property>
+                      </widget>
+                     </item>
                     </layout>
                    </widget>
                   </item>
-                  <item row="1" column="0">
-                   <widget class="QRadioButton" name="rbtn_emgipc">
-                    <property name="maximumSize">
-                     <size>
-                      <width>15</width>
-                      <height>16777215</height>
-                     </size>
-                    </property>
-                    <property name="text">
-                     <string/>
-                    </property>
-                   </widget>
-                  </item>
-                  <item row="3" column="3">
-                   <widget class="QPushButton" name="btn_connectemgio">
-                    <property name="maximumSize">
-                     <size>
-                      <width>75</width>
-                      <height>16777215</height>
-                     </size>
-                    </property>
-                    <property name="font">
-                     <font>
-                      <pointsize>9</pointsize>
-                     </font>
-                    </property>
-                    <property name="text">
-                     <string>Connect</string>
-                    </property>
-                   </widget>
-                  </item>
-                  <item row="3" column="4">
+                  <item row="2" column="2" colspan="2">
                    <widget class="QLabel" name="lbl_statusemgio">
                     <property name="font">
                      <font>
