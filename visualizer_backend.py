@@ -23,6 +23,7 @@ import copy
 import select
 import re
 from scipy import signal
+import h5py
 
 # pyqtgraph global options -  white background, black foreground
 pg.setConfigOption('background', 'w')
@@ -145,7 +146,7 @@ class IOConsumer(QObject):
     # Default Data
     _dataType = np.single               # default (single-precision float)
     _dataTypeBytes = 4                  # default (single precision float is 4 bytes)
-    _nDataToReceive = 2                 # default (designed for x,y coordinates)
+    _nDataToReceive = 16                # default (designed for x,y coordinates)
     _data = np.zeros(_nDataToReceive, dtype=_dataType)
     _connected = False
 
@@ -179,6 +180,8 @@ class IOConsumer(QObject):
 class EmgTcpClient(IOConsumer):
 
     SupplyEmgServerMsg = pyqtSignal(str)
+    SupplyRawData = pyqtSignal(np.ndarray)
+    SupplyFilteredData = pyqtSignal(np.ndarray)
 
     # Class Data
     _addr = ""
@@ -186,12 +189,8 @@ class EmgTcpClient(IOConsumer):
     _emgDataPort = 50041
     _emgCommSockFd = None
     _emgDataSockFd = None
-    _nReadingsPerSample = 16
+    _tcp_recv_thread_name = "tcp_receive_thread"
 
-    _dataLength = 1000
-    _data_raw = np.zeros((_nReadingsPerSample, _dataLength))   # raw data
-    _data_hpf = np.zeros((_nReadingsPerSample, _dataLength))   # data after its been high pass filtered
-    _data_ma  = np.zeros((_nReadingsPerSample, _dataLength))   # 1/2 second moving avg of abs(_data_hpf)
 
 
     def __init__(self):
@@ -205,7 +204,23 @@ class EmgTcpClient(IOConsumer):
         self.b, self.a = signal.butter(n, cutoff/self.Fn, 'high')
         self.nCoeffs = len(self.a)
 
+        # initialize data arrays
+        self.InitDataArrays()
+
+    def InitDataArrays(self):
+        self._nReadingsPerSample = 16
+        self._dataLength = 1000
+        self._data_raw = np.zeros((self._nReadingsPerSample, self._dataLength))   # raw data
+        self._data_hpf = np.zeros((self._nReadingsPerSample, self._dataLength))   # data after its been high pass filtered
+        self._data_ma  = np.zeros((self._nReadingsPerSample, self._dataLength))   # 1/2 second moving avg of abs(_data_hpf)
+
     def Connect(self, addr):
+        # Validate the given ip address Is Correct
+        try:
+            socket.inet_aton(addr)
+        except:
+            self.SupplyStatusMessage.emit("Invalid IP Address")
+
         # Initialize server address/port and socket
         try:
             self._addr = addr
@@ -213,21 +228,37 @@ class EmgTcpClient(IOConsumer):
             self._emgDataSockFd = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
             # Connect to TCP port.  Port 50040 is the communication port. Port 50041 is the data port
+            self._emgCommSockFd.settimeout(5)
+            self._emgDataSockFd.settimeout(5)
             self._emgCommSockFd.connect((self._addr, self._emgCommPort))
             self._emgDataSockFd.connect((self._addr, self._emgDataPort))
+            self._emgCommSockFd.settimeout(None)
+            self._emgDataSockFd.settimeout(None)
             self.SetConnectionState(True)
-        except:
+
+            # start receive thread
+            threading.Thread(target=self.ReceiveForever, name=self._tcp_recv_thread_name, daemon=True).start()
+        except socket.timeout:
+            self.SupplyStatusMessage.emit('Status: Timeout Occurred During Connection')
+            self.SetConnectionState(False)
+        except Exception as e:
+            print(e)
             self.SetConnectionState(False)
 
-
-
     def SendEmgCommand(self, txt):
+        # The Delsys Trigno server takes commands listed at https://www.delsys.com/downloads/USERSGUIDE/trigno/sdk.pdf
+        # If that link is broken, google "delsys trigno sdk user guide".  It should be fairly easy to find on Delsys' website
+
+        # Each command ends with two carriage return, linefeed characters ""\r\n\r\n"
         if len(txt) != 0:
-            txt += "\r\n\r\n"
-            bTxt = str.encode(txt)
-            self._emgCommSockFd.send(bTxt)
+            txt += "\r\n\r\n"               # add two sets of carriage return, linefeed characters
+            bTxt = str.encode(txt)          # encode to byte string
+            self._emgCommSockFd.send(bTxt)  # send data
 
     def ReceiveForever(self):
+
+        #Init Data Arrays
+        self.InitDataArrays()
 
         # One sample from the Delsys Trigno system will give 16 - 4 byte (single precision float) readings
         # Therefore, anytime we receive data, we will want to read it in 64 bytes at a time
@@ -236,9 +267,9 @@ class EmgTcpClient(IOConsumer):
         while (self._connected):
             try:
                 # Receive from Comm Port
-                receivedMessage = select.select([self._emgCommSockFd], [], [])
+                receivedMessage = select.select([self._emgCommSockFd], [], [], 0)
                 if (receivedMessage[0]):
-                    bEmgResponse = self._emgCommSocket.recv(256, 0)
+                    bEmgResponse = self._emgCommSockFd.recv(256, 0)
                     emgResponse = bEmgResponse.decode()
                     self.SupplyEmgServerMsg.emit(emgResponse)
 
@@ -249,35 +280,38 @@ class EmgTcpClient(IOConsumer):
                     bEmgData = self._emgDataSockFd.recv(emgSampleLen*nNewSamples, 0)
                     emgData = np.frombuffer(bEmgData, dtype=np.single)
                     emgData = np.reshape(emgData, (nNewSamples, nReadingsPerSample)).T    # will give [16xn] matrix where 'oldest' data is in the 0th column, 1st col is one sample newer, up to nth col which is newest
-                    self.ApplyFilter(emgData)
+                    for iSample in range(0, nNewSamples):
+                        self.ApplyFilter(emgData[:,iSample])
+                        self.SupplyRawData.emit(self._data_raw[:,0])
+                        self.SupplyFilteredData.emit(self._data_ma[:,0])
 
             except ConnectionResetError:
-                self.SupplyStatusMessage("Status: Disconnected\nDelsys Base Reset")
+                self.SupplyStatusMessage.emit("Status: Disconnected\nDelsys Base Reset")
                 self.SetConnectionState(False)
-            except:
+            except Exception as e:
+                print(e)
                 self.SetConnectionState(False)
 
     def ApplyFilter(self, data_new):
+        # shift data
+        self._data_raw[:,1:] = self._data_raw[:,0:-1]
+        self._data_hpf[:,1:] = self._data_hpf[:,0:-1]
+        self._data_ma[:,1:]  = self._data_ma[:,0:-1]
 
-        nReadings, nSamples = data_new.shape
-        for iSample in range(0, nSamples):
-            # shift data
-            self._data_raw[:,1:] = self._data_raw[:,0:-1]
-            self._data_hpf[:,1:] = self._data_hpf[:,0:-1]
-            self._data_ma[:,1:]  = self._data_ma[:,0:-1]
+        # insert new data into _data_raw, then apply high pass filter
+        self._data_raw[:,0] = data_new[:]
+        self._data_hpf[:,0] = ( self._data_raw[:,0:self.nCoeffs].dot(self.b) -
+                                self._data_hpf[:,1:self.nCoeffs].dot(self.a[1:]) )/self.a[0]
 
-            # insert new data into _data_raw, then apply high pass filter
-            self._data_raw[:,0] = data_new[:,iSample]
-            self._data_hpf[:,0] = ( self._data_raw[:,0:self.nCoeffs].dot(self.b) -
-                                    self._data_hpf[:,1:self.nCoeffs].dot(self.a[1:]) )/self.a[0]
-            self._data_ma[:,0] = np.mean(np.abs(self._data_hpf[:,0:self.Fs/2]), axis=1)
-
+        # apply 1/2 second moving average to abs val of high pass filtered data
+        self._data_ma[:,0] = np.mean(np.abs(self._data_hpf[:,0:int(self.Fs/2)]), axis=1)
 
     def Disconnect(self):
-        pass
+        self._emgCommSockFd.close()
+        self._emgDataSockFd.close()
 
     def GetData(self):
-        pass
+        return self._data_ma[:,0]
 
 
 class SharedMemoryConsumer(IOConsumer):
@@ -325,7 +359,6 @@ class SharedMemoryConsumer(IOConsumer):
             pass
         finally:
             self.SetConnectionState(False)
-
 
     def GetData(self):
         try:
@@ -405,8 +438,6 @@ class DataProcessingThread(QThread):
         # filterCoeffs is a list of 2 numpy arrays of Butterworth coefficients
         QThread.__init__(self)
         self._dataLenMax = 11
-        self._dataUnfilt = np.zeros((2,self._dataLenMax))
-        self._dataFilt = np.zeros((2,self._dataLenMax))
         self._Timer = QtCore.QTimer()
         self._Timer.setInterval(1.0) # 1ms interval (1000Hz)
         self._Timer.timeout.connect(self.RunTask)
@@ -430,17 +461,20 @@ class DataProcessingThread(QThread):
         self._dataUnfilt[:,0] = newData
 
         # Filter data and insert into filtered array
-        self._dataFilt[0,0] = (self._filterNum.dot(self._dataUnfilt[0,:]) -
-                               self._filterDen[1:].dot(self._dataFilt[0,1:]))/self._filterDen[0]
-        self._dataFilt[1,0] = (self._filterNum.dot(self._dataUnfilt[1,:]) -
-                               self._filterDen[1:].dot(self._dataFilt[1,1:]))/self._filterDen[0]
+        self._dataFilt[4,0] = (self._filterNum.dot(self._dataUnfilt[4,:]) -
+                               self._filterDen[1:].dot(self._dataFilt[4,1:]))/self._filterDen[0]
+        self._dataFilt[5,0] = (self._filterNum.dot(self._dataUnfilt[5,:]) -
+                               self._filterDen[1:].dot(self._dataFilt[5,1:]))/self._filterDen[0]
 
         # Make sure filtered data was not computed as nan
         if (np.isnan(np.sum(self._dataFilt[:,0]))):
             self.StopTask()
-            self._dataUnfilt = np.zeros((2,self._dataLenMax))
-            self._dataFilt = np.zeros((2,self._dataLenMax))
+            self.InitDataArrays()
             self.FilterProcessingErrorOccurred.emit("nan")
+
+    def InitDataArrays(self):
+        self._dataUnfilt = np.zeros((self._ioconsumer._nDataToReceive, self._dataLenMax))
+        self._dataFilt = np.zeros((self._ioconsumer._nDataToReceive, self._dataLenMax))
 
     def RunTask(self):
         data_temp = self._ioconsumer.GetData()
@@ -449,9 +483,8 @@ class DataProcessingThread(QThread):
         self.SupplyUnfilteredData.emit(self._dataUnfilt[:,0])
 
     def StartTask(self, ioconsumer, filter):
-        self._dataUnfilt = np.zeros((2,self._dataLenMax))
-        self._dataFilt = np.zeros((2,self._dataLenMax))
         self.SetIOConsumer(ioconsumer)
+        self.InitDataArrays()
         self.SetFilter(filter)
         self._Timer.start()
 
@@ -462,32 +495,12 @@ class DataProcessingThread(QThread):
 class MainWindow(QMainWindow):
 
     # Class Data
-
-    _ipAddressStr = None
-    _emgCommPort = 50040
-    _emgDataPort = 50041
-    _socketTimeout = 1.0 #seconds
-
-    _emgDataThreadActive = False
-    _emgCommThreadActive = False
-
-    _emgDataQueue = deque(maxlen=5000)
-
-    _emgServerAddress = None
     _activeEmgSensors = []
     _emgSensors = [] # filled in constructor
     _emgConnected = False
-    _emgDataSourceDict = {
-                         'EMG_CLIENT': 0,
-                         'EMG_IPC'   : 1
-                         }
-    _emgDataSource = None
+    _emgDataQueue = deque([], 5000)
 
     _PlotTimer = None
-
-    _threadname_emgdatarecv = "THREAD_EMGDATARECV"
-    _threadname_emgcommrecv = "THREAD_EMGCOMMRECV"
-
 
     # Shared Memory Class Data
     _filterCoeffs = {
@@ -495,16 +508,18 @@ class MainWindow(QMainWindow):
                     'defaultfilter': [np.array([1,2]),np.array([3,4,5])],
                     'customfilter': [np.array([1]),np.array([1])]
                     }
+    _filter = None
+
+
     _shmFile = None
     _shmKey = None
+    _shm = None
 
-    _coordinatesUnfiltered = np.zeros(2)
-    _coordinatesFiltered = np.zeros(2)
+    _dataUnfilt = np.zeros(16)
+    _dataFilt = np.zeros(16)
 
     _dataType = None
     _dataTypeBytes = None
-    _shm = None
-    _filter = None
     _DataProcessingThread = DataProcessingThread()
     _ioconsumer = IOConsumer()
 
@@ -537,8 +552,6 @@ class MainWindow(QMainWindow):
                                     'emg8': {'number': 8, 'mvc': 0, 'plot': ContractionLevelPlot('EMG 8'), 'active': False}
                                     }
 
-
-
     def Init2DDataProcessingThread(self):
         self._DataProcessingThread = DataProcessingThread()
         self._DataProcessingThread.SupplyFilteredData.connect(self.Update2DFilteredData)
@@ -565,6 +578,12 @@ class MainWindow(QMainWindow):
             self.btn_connect2ddata.setText("Connect")
             self.Stop2DDataThreadTask()
             self.Stop2DPlot()
+
+    def UpdateEmgConnectionStatus(self, connectionState):
+        if (connectionState):  # connected
+            self.lbl_statusemgio.setText("Status: Connected")
+        else:                  # disconnected
+            self.lbl_statusemgio.setText("Status: Disconnected")
 
     def PrintErrorFromDataProcessThread(self, msg):
        msgbox = QMessageBox()
@@ -691,10 +710,10 @@ class MainWindow(QMainWindow):
             msgbox.exec_()
 
     def Update2DFilteredData(self, data):
-        self._coordinatesFiltered = data
+        self._dataFilt = data
 
     def Update2DUnfilteredData(self, data):
-        self._coordinatesUnfiltered = data
+        self._dataUnfilt = data
 
     def Handle2DConnection(self):
         checked = self.btn_connect2ddata.isChecked()
@@ -839,9 +858,14 @@ class MainWindow(QMainWindow):
 
         # Initialize Circle In Plot
         center = ((self._xmax + self._xmin)/2, (self._ymax + self._ymin)/2)
-        radius = self._plot2d_padding
-        self._circle_user = Circle(center, radius, color='b')
+        radius = self._dataUnfilt[3]
+        self._circle_user = Circle(center, radius/2, color='r', fill=True, alpha=0.5)
+        self._circle_desired = Circle(center, radius, color='k', fill=False, alpha=0.5, linewidth=3.0)
+        self._circle_exp = Circle(center, radius/4, color='k', fill=True, alpha=0.5)
+
         self._plot2dax.add_artist(self._circle_user)
+        self._plot2dax.add_artist(self._circle_desired)
+        self._plot2dax.add_artist(self._circle_exp)
 
         # Start Plot Timer
         self._plot2dTimer.start()
@@ -860,14 +884,31 @@ class MainWindow(QMainWindow):
         self.btn_2dplotstop.setEnabled(False)
         self.btn_2dplotstart.setEnabled(True)
 
+
         # Stop Plot Timer
+        self.lastmode = 0
         self._plot2dTimer.stop()
 
     def Update2DPlot(self):
-        self._circle_user.center = self._coordinatesFiltered[0], self._coordinatesFiltered[1]
+
+        mode = self._dataFilt[0]
+        modeChanged = (mode == self.lastmode)
+        if (modeChanged):
+            if (mode == 1):
+                self._circle_exp.set_visible(False)
+            elif (mode == 2):
+                self._circle_exp.set_visible(True)
+
+        # update circle center coordinates
+        self._circle_desired.center = self._dataFilt[1], self._dataFilt[2]
+        self._circle_user.center    = self._dataFilt[4], self._dataFilt[5]
+        self._circle_exp.center     = self._dataFilt[6], self._dataFilt[7]
+
+        # update plot
         self._plot2dax.figure.canvas.restore_region(self._plot2dax_background)
-        self._plot2dax.draw_artist(self._plot2dax.artists[0])
+        self._plot2dax.draw_artist(self._plot2dax.artists[0:2])
         self._plot2dax.figure.canvas.update()
+
 
 
     def SetPlotBorders(self):
@@ -973,10 +1014,43 @@ class MainWindow(QMainWindow):
 
     def InitEmgTab(self):
         self.InitEmgButtons()
+        self.InitEmgTcpClient()
         self.InitEmgPlot()
         self.InitEmgLines()
         self.InitEmgPlotTimer()
 
+    def InitEmgTcpClient(self):
+        self._emgtcpclient = EmgTcpClient()
+        self._emgtcpclient.SupplyEmgServerMsg.connect(self.HandleEmgServerMsg)
+        self._emgtcpclient.SupplyConnectionState.connect(self.UpdateEmgConnectionStatus)
+        self._emgtcpclient.SupplyStatusMessage.connect(self.MakeMsgbox)
+        self.btn_connectemgio.clicked.connect(self.HandleEmgConnection)
+        self.btn_sendservercmd.clicked.connect(self.HandleEmgCommand)
+
+    def HandleEmgConnection(self):
+        if (self._emgtcpclient.IsConnected()):
+            self.MakeMsgbox("EMG Client Already Connected")
+        else:
+            addr = self.lineedit_emgipaddress.text()
+            self._emgtcpclient.Connect(addr)
+
+    def HandleEmgCommand(self):
+        if (self._emgtcpclient.IsConnected()):
+            cmd = self.lineedit_servercmd.text()
+            self.HandleEmgServerMsg("Command: {}".format(cmd))
+            self._emgtcpclient.SendEmgCommand(cmd)
+            self.lineedit_servercmd.setText("")
+        else:
+            self.lineedit_servercmd.setText("")
+            self.MakeMsgbox("EMG Client Must Be Connected To Send A Command")
+
+    def MakeMsgbox(self, msg):
+        msgbox = QMessageBox()
+        msgbox.setText(msg)
+        msgbox.exec_()
+
+    def HandleEmgServerMsg(self, txt):
+        self.textedit_serverreplywindow.append(txt)
 
     def InitEmgButtons(self):
         self._emgSensors = [self.btn_emg1,
@@ -1002,8 +1076,6 @@ class MainWindow(QMainWindow):
                                      self.textedit_serverreplywindow]
 
         # Activate/Deactivate EMGs
-        # self.btn_connectemgio.clicked.connect(self.ConnectDataIO)
-        # self.btn_sendservercmd.clicked.connect(self.SendEmgCommand)
         self.btn_plotstart.clicked.connect(self.StartEmgPlot)
         self.btn_plotstop.clicked.connect(self.StopEmgPlot)
 
@@ -1024,6 +1096,100 @@ class MainWindow(QMainWindow):
         self.lineedit_emg6label.textChanged.connect(self.ChangeContractionLevelPlotTitle)
         self.lineedit_emg7label.textChanged.connect(self.ChangeContractionLevelPlotTitle)
         self.lineedit_emg8label.textChanged.connect(self.ChangeContractionLevelPlotTitle)
+
+        # MVC Buttons
+        self.btn_startmvc.clicked.connect(self.MvcTrialStart)
+        self.btn_stopmvc.clicked.connect(self.MvcTrialStop)
+        self.btn_importmvcdata.clicked.connect(self.ImportMvcData)
+        self.btn_exportmvcdata.clicked.connect(self.ExportMvcData)
+
+    def CollectMvcDataRaw(self, data):
+        self._mvcdata_raw.append(data)  #_mcvdata is a deque obj
+
+    def CollectMvcDataFilt(self, data):
+        self._mvcdata_filt.append(data)  #_mcvdata is a deque obj
+
+    def MvcTrialStart(self):
+        #
+        if (not self._emgtcpclient.IsConnected()):
+            self.MakeMsgbox("EMG Must Be Connected")
+            return
+
+        try:
+            # Start data collection
+            self._mvcdata_raw = deque([])
+            self._mvcdata_filt = deque([])
+            self._emgtcpclient.SupplyRawData.connect(self.CollectMvcDataRaw)
+            self._emgtcpclient.SupplyFilteredData.connect(self.CollectMvcDataFilt)
+
+            # Disable/enable widgets
+            self.checkbox_emg1mvc.setEnabled(False)
+            self.checkbox_emg2mvc.setEnabled(False)
+            self.checkbox_emg3mvc.setEnabled(False)
+            self.checkbox_emg4mvc.setEnabled(False)
+            self.checkbox_emg5mvc.setEnabled(False)
+            self.checkbox_emg6mvc.setEnabled(False)
+            self.checkbox_emg7mvc.setEnabled(False)
+            self.checkbox_emg8mvc.setEnabled(False)
+            self.btn_setmvc.setEnabled(False)
+            self.btn_importmvcdata.setEnabled(False)
+            self.btn_exportmvcdata.setEnabled(False)
+            self.btn_startmvc.setEnabled(False)
+            self.btn_stopmvc.setEnabled(True)
+        except:
+            pass
+
+    def ImportMvcData(self):
+        #Open filedialog box
+        options = QFileDialog.Options()
+        options |= QFileDialog.DontUseNativeDialog
+        filename, _ = QFileDialog.getOpenFileName(directory=os.getcwd(), options=options)
+        try:
+            f = h5py.File(filename, 'r')
+            self._mvcdata_raw = f['data_raw'][:]
+            self._mvcdata_filt = f['data_filt'][:]
+            f.close()
+        except:
+            self.MakeMsgbox("Error Importing from:\n{}".format(filename))
+
+    def ExportMvcData(self):
+        #Open filedialog box
+        options = QFileDialog.Options()
+        options |= QFileDialog.DontUseNativeDialog
+        filename, _ = QFileDialog.getSaveFileName(directory=os.getcwd(), options=options)
+
+        dataraw = np.array(self._mvcdata_raw)
+        datafilt = np.array(self._mvcdata_filt)
+
+        # Create hdf5 file
+        f = h5py.File(filename, 'w')
+        f.create_dataset('data_raw', data=dataraw)
+        f.create_dataset('data_filt', data=datafilt)
+        f.close()
+
+    def MvcTrialStop(self):
+        # Stop Collecting Data
+        self._emgtcpclient.SupplyRawData.disconnect(self.CollectMvcDataRaw)
+        self._emgtcpclient.SupplyFilteredData.disconnect(self.CollectMvcDataFilt)
+
+        # Convert to numpy arrays
+        self._mvcdata_raw = np.array(self._mvcdata_raw)
+        self._mvcdata_filt = np.array(self._mvcdata_filt)
+
+        # Disable/enable widgets
+        self.checkbox_emg1mvc.setEnabled(True)
+        self.checkbox_emg2mvc.setEnabled(True)
+        self.checkbox_emg3mvc.setEnabled(True)
+        self.checkbox_emg4mvc.setEnabled(True)
+        self.checkbox_emg5mvc.setEnabled(True)
+        self.checkbox_emg6mvc.setEnabled(True)
+        self.checkbox_emg7mvc.setEnabled(True)
+        self.checkbox_emg8mvc.setEnabled(True)
+        self.btn_setmvc.setEnabled(True)
+        self.btn_importmvcdata.setEnabled(True)
+        self.btn_exportmvcdata.setEnabled(True)
+        self.btn_startmvc.setEnabled(True)
+        self.btn_stopmvc.setEnabled(False)
 
     def ChangeEmgMvcMuscleLabel(self, txt):
         lineedit_name = self.sender().objectName()

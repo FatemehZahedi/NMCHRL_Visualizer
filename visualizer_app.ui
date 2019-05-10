@@ -35,7 +35,7 @@
          <string/>
         </property>
         <property name="currentIndex">
-         <number>1</number>
+         <number>0</number>
         </property>
         <widget class="QWidget" name="tab_2d">
          <attribute name="title">
@@ -1593,8 +1593,7 @@
                      </font>
                     </property>
                     <property name="text">
-                     <string>MVC 
-(Raw Reading)</string>
+                     <string>MVC</string>
                     </property>
                     <property name="alignment">
                      <set>Qt::AlignCenter</set>
@@ -1894,6 +1893,12 @@
                   </item>
                   <item row="0" column="3">
                    <widget class="QLabel" name="label_2">
+                    <property name="sizePolicy">
+                     <sizepolicy hsizetype="Maximum" vsizetype="Preferred">
+                      <horstretch>0</horstretch>
+                      <verstretch>0</verstretch>
+                     </sizepolicy>
+                    </property>
                     <property name="minimumSize">
                      <size>
                       <width>90</width>
@@ -1914,6 +1919,9 @@
                     </property>
                     <property name="text">
                      <string>Contraction Level (%MVC)</string>
+                    </property>
+                    <property name="alignment">
+                     <set>Qt::AlignCenter</set>
                     </property>
                     <property name="wordWrap">
                      <bool>true</bool>
@@ -1986,7 +1994,7 @@
                   </font>
                  </property>
                  <property name="title">
-                  <string>Record MVC</string>
+                  <string>MVC</string>
                  </property>
                  <layout class="QGridLayout" name="gridLayout_20">
                   <property name="leftMargin">
@@ -2001,35 +2009,54 @@
                   <property name="bottomMargin">
                    <number>2</number>
                   </property>
-                  <item row="0" column="1" colspan="2">
-                   <widget class="QLabel" name="label">
-                    <property name="font">
-                     <font>
-                      <pointsize>30</pointsize>
-                     </font>
-                    </property>
-                    <property name="text">
-                     <string/>
-                    </property>
-                   </widget>
-                  </item>
                   <item row="0" column="0">
-                   <widget class="QPushButton" name="pushButton">
-                    <property name="maximumSize">
-                     <size>
-                      <width>65</width>
-                      <height>16777215</height>
-                     </size>
+                   <widget class="QGroupBox" name="groupBox_11">
+                    <property name="title">
+                     <string>Record Data</string>
                     </property>
-                    <property name="text">
-                     <string>Start</string>
-                    </property>
+                    <layout class="QGridLayout" name="gridLayout_5">
+                     <property name="leftMargin">
+                      <number>2</number>
+                     </property>
+                     <property name="topMargin">
+                      <number>2</number>
+                     </property>
+                     <property name="rightMargin">
+                      <number>2</number>
+                     </property>
+                     <property name="bottomMargin">
+                      <number>2</number>
+                     </property>
+                     <item row="0" column="1">
+                      <widget class="QPushButton" name="btn_stopmvc">
+                       <property name="enabled">
+                        <bool>false</bool>
+                       </property>
+                       <property name="text">
+                        <string>Stop</string>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="0" column="0">
+                      <widget class="QPushButton" name="btn_startmvc">
+                       <property name="maximumSize">
+                        <size>
+                         <width>65</width>
+                         <height>16777215</height>
+                        </size>
+                       </property>
+                       <property name="text">
+                        <string>Start</string>
+                       </property>
+                      </widget>
+                     </item>
+                    </layout>
                    </widget>
                   </item>
                   <item row="1" column="0" colspan="3">
                    <widget class="QGroupBox" name="groupBox_10">
                     <property name="title">
-                     <string>Muscles To Record (These Will Be Overwritten)</string>
+                     <string>Set MVC</string>
                     </property>
                     <layout class="QGridLayout" name="gridLayout_21">
                      <property name="leftMargin">
@@ -2047,6 +2074,13 @@
                      <property name="spacing">
                       <number>2</number>
                      </property>
+                     <item row="2" column="0">
+                      <widget class="QCheckBox" name="checkbox_emg3mvc">
+                       <property name="text">
+                        <string>EMG 3</string>
+                       </property>
+                      </widget>
+                     </item>
                      <item row="2" column="1">
                       <widget class="QCheckBox" name="checkbox_emg7mvc">
                        <property name="text">
@@ -2082,13 +2116,6 @@
                        </property>
                       </widget>
                      </item>
-                     <item row="2" column="0">
-                      <widget class="QCheckBox" name="checkbox_emg3mvc">
-                       <property name="text">
-                        <string>EMG 3</string>
-                       </property>
-                      </widget>
-                     </item>
                      <item row="3" column="0">
                       <widget class="QCheckBox" name="checkbox_emg4mvc">
                        <property name="text">
@@ -2100,6 +2127,48 @@
                       <widget class="QCheckBox" name="checkbox_emg8mvc">
                        <property name="text">
                         <string>EMG 8</string>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="4" column="0">
+                      <widget class="QPushButton" name="btn_setmvc">
+                       <property name="text">
+                        <string>Set</string>
+                       </property>
+                      </widget>
+                     </item>
+                    </layout>
+                   </widget>
+                  </item>
+                  <item row="0" column="1" colspan="2">
+                   <widget class="QGroupBox" name="groupBox_12">
+                    <property name="title">
+                     <string>Import/Export Data</string>
+                    </property>
+                    <layout class="QGridLayout" name="gridLayout_22">
+                     <property name="leftMargin">
+                      <number>2</number>
+                     </property>
+                     <property name="topMargin">
+                      <number>2</number>
+                     </property>
+                     <property name="rightMargin">
+                      <number>2</number>
+                     </property>
+                     <property name="bottomMargin">
+                      <number>2</number>
+                     </property>
+                     <item row="0" column="0">
+                      <widget class="QPushButton" name="btn_importmvcdata">
+                       <property name="text">
+                        <string>Import</string>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="0" column="1">
+                      <widget class="QPushButton" name="btn_exportmvcdata">
+                       <property name="text">
+                        <string>Export</string>
                        </property>
                       </widget>
                      </item>
