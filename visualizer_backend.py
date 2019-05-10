@@ -459,6 +459,7 @@ class DataProcessingThread(QThread):
 
         # Insert Data Into Unfiltered Array
         self._dataUnfilt[:,0] = newData
+        self._dataFilt[:,0] = newData
 
         # Filter data and insert into filtered array
         self._dataFilt[4,0] = (self._filterNum.dot(self._dataUnfilt[4,:]) -
@@ -858,16 +859,17 @@ class MainWindow(QMainWindow):
 
         # Initialize Circle In Plot
         center = ((self._xmax + self._xmin)/2, (self._ymax + self._ymin)/2)
-        radius = self._dataUnfilt[3]
+        radius = self._dataFilt[3]
         self._circle_user = Circle(center, radius/2, color='r', fill=True, alpha=0.5)
         self._circle_desired = Circle(center, radius, color='k', fill=False, alpha=0.5, linewidth=3.0)
         self._circle_exp = Circle(center, radius/4, color='k', fill=True, alpha=0.5)
 
-        self._plot2dax.add_artist(self._circle_user)
         self._plot2dax.add_artist(self._circle_desired)
+        self._plot2dax.add_artist(self._circle_user)
         self._plot2dax.add_artist(self._circle_exp)
 
         # Start Plot Timer
+        self.lastmode = 0
         self._plot2dTimer.start()
 
 
@@ -886,7 +888,6 @@ class MainWindow(QMainWindow):
 
 
         # Stop Plot Timer
-        self.lastmode = 0
         self._plot2dTimer.stop()
 
     def Update2DPlot(self):
@@ -906,7 +907,9 @@ class MainWindow(QMainWindow):
 
         # update plot
         self._plot2dax.figure.canvas.restore_region(self._plot2dax_background)
-        self._plot2dax.draw_artist(self._plot2dax.artists[0:2])
+        self._plot2dax.draw_artist(self._plot2dax.artists[0])
+        self._plot2dax.draw_artist(self._plot2dax.artists[1])
+        self._plot2dax.draw_artist(self._plot2dax.artists[2])
         self._plot2dax.figure.canvas.update()
 
 
