@@ -857,6 +857,44 @@
                     </layout>
                    </widget>
                   </item>
+                  <item row="2" column="1" colspan="2">
+                   <widget class="QGroupBox" name="groupBox_13">
+                    <property name="title">
+                     <string>Flip Directions</string>
+                    </property>
+                    <layout class="QGridLayout" name="gridLayout_23">
+                     <property name="leftMargin">
+                      <number>2</number>
+                     </property>
+                     <property name="topMargin">
+                      <number>2</number>
+                     </property>
+                     <property name="rightMargin">
+                      <number>2</number>
+                     </property>
+                     <property name="bottomMargin">
+                      <number>2</number>
+                     </property>
+                     <property name="spacing">
+                      <number>2</number>
+                     </property>
+                     <item row="0" column="0">
+                      <widget class="QCheckBox" name="checkbox_flipx">
+                       <property name="text">
+                        <string>X-Axis</string>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="0" column="1">
+                      <widget class="QCheckBox" name="checkbox_flipy">
+                       <property name="text">
+                        <string>Y-Axis</string>
+                       </property>
+                      </widget>
+                     </item>
+                    </layout>
+                   </widget>
+                  </item>
                  </layout>
                 </widget>
                </item>

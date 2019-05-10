@@ -895,15 +895,38 @@ class MainWindow(QMainWindow):
         mode = self._dataFilt[0]
         modeChanged = (mode == self.lastmode)
         if (modeChanged):
-            if (mode == 1):
+            if (abs(mode - 1) < 1e-6):              # mode 1
                 self._circle_exp.set_visible(False)
-            elif (mode == 2):
+            elif (abs(mode - 2) < 1e-6):            # mode 2
                 self._circle_exp.set_visible(True)
+        self.lastmode = mode
+
+        # get x coordinates
+        if (self.checkbox_flipx.checkState() == 0):  # unchecked
+            d_x = self._dataFilt[1]
+            u_x = self._dataFilt[4]
+            e_x = self._dataFilt[6]
+        elif (self.checkbox_flipx.checkState() == 2): # checked
+            center_x = (self._xmin + self._xmax)/2
+            d_x = -(self._dataFilt[1] - center_x) + center_x
+            u_x = -(self._dataFilt[4] - center_x) + center_x
+            e_x = -(self._dataFilt[6] - center_x) + center_x
+
+        # get y coordinates
+        if (self.checkbox_flipy.checkState() == 0):  # unchecked
+            d_y = self._dataFilt[2]
+            u_y = self._dataFilt[5]
+            e_y = self._dataFilt[7]
+        elif (self.checkbox_flipy.checkState() == 2): # checked
+            center_y = (self._ymin + self._ymax)/2
+            d_y = -(self._dataFilt[2] - center_y) + center_y
+            u_y = -(self._dataFilt[5] - center_y) + center_y
+            e_y = -(self._dataFilt[7] - center_y) + center_y
 
         # update circle center coordinates
-        self._circle_desired.center = self._dataFilt[1], self._dataFilt[2]
-        self._circle_user.center    = self._dataFilt[4], self._dataFilt[5]
-        self._circle_exp.center     = self._dataFilt[6], self._dataFilt[7]
+        self._circle_desired.center = d_x, d_y
+        self._circle_user.center    = u_x, u_y
+        self._circle_exp.center     = e_x, e_y
 
         # update plot
         self._plot2dax.figure.canvas.restore_region(self._plot2dax_background)
