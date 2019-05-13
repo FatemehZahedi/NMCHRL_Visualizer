@@ -859,10 +859,12 @@ class MainWindow(QMainWindow):
 
         # Initialize Circle In Plot
         center = ((self._xmax + self._xmin)/2, (self._ymax + self._ymin)/2)
-        radius = self._dataFilt[3]
-        self._circle_user = Circle(center, radius/2, color='r', fill=True, alpha=0.5)
-        self._circle_desired = Circle(center, radius, color='k', fill=False, alpha=0.5, linewidth=3.0)
-        self._circle_exp = Circle(center, radius/4, color='k', fill=True, alpha=0.5)
+        des_radius = self._dataFilt[3]
+        user_radius = self._dataFilt[6]
+        exp_radius = self._dataFilt[9]
+        self._circle_user = Circle(center, user_radius, color='r', fill=True, alpha=0.5)
+        self._circle_desired = Circle(center, des_radius, color='k', fill=False, alpha=0.5, linewidth=3.0)
+        self._circle_exp = Circle(center, exp_radius, color='k', fill=True, alpha=0.5)
 
         self._plot2dax.add_artist(self._circle_desired)
         self._plot2dax.add_artist(self._circle_user)
@@ -905,23 +907,23 @@ class MainWindow(QMainWindow):
         if (self.checkbox_flipx.checkState() == 0):  # unchecked
             d_x = self._dataFilt[1]
             u_x = self._dataFilt[4]
-            e_x = self._dataFilt[6]
+            e_x = self._dataFilt[7]
         elif (self.checkbox_flipx.checkState() == 2): # checked
             center_x = (self._xmin + self._xmax)/2
             d_x = -(self._dataFilt[1] - center_x) + center_x
             u_x = -(self._dataFilt[4] - center_x) + center_x
-            e_x = -(self._dataFilt[6] - center_x) + center_x
+            e_x = -(self._dataFilt[7] - center_x) + center_x
 
         # get y coordinates
         if (self.checkbox_flipy.checkState() == 0):  # unchecked
             d_y = self._dataFilt[2]
             u_y = self._dataFilt[5]
-            e_y = self._dataFilt[7]
+            e_y = self._dataFilt[8]
         elif (self.checkbox_flipy.checkState() == 2): # checked
             center_y = (self._ymin + self._ymax)/2
             d_y = -(self._dataFilt[2] - center_y) + center_y
             u_y = -(self._dataFilt[5] - center_y) + center_y
-            e_y = -(self._dataFilt[7] - center_y) + center_y
+            e_y = -(self._dataFilt[8] - center_y) + center_y
 
         # update circle center coordinates
         self._circle_desired.center = d_x, d_y
