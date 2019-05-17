@@ -938,7 +938,7 @@ class MainWindow(QMainWindow):
         self._plot2dax.figure.canvas.update()
 
         # Update damping label
-        if (self.check_showDamping.checkState() == 2):
+        if (self.checkbox_showdamping.checkState() == 2):
             self.lbl_dampingval.setText("Damping: {:.2f} Ns/m".format(self._dataFilt[10]))
         else:
             self.lbl_dampingval.setText("")
