@@ -937,7 +937,11 @@ class MainWindow(QMainWindow):
         self._plot2dax.draw_artist(self._plot2dax.artists[2])
         self._plot2dax.figure.canvas.update()
 
-
+        # Update damping label
+        if (self.check_showDamping.checkState() == 2):
+            self.lbl_dampingval.setText("Damping: {:.2f} Ns/m".format(self._dataFilt[10]))
+        else:
+            self.lbl_dampingval.setText("")
 
     def SetPlotBorders(self):
         try:
