@@ -944,8 +944,8 @@ class MainWindow(QMainWindow):
             self.lbl_dampingval.setText("")
 
         # Update trial numbers label
-        trialNum = self._dataFilt[11]
-        nTrials = self._dataFilt[12]
+        trialNum = int(self._dataFilt[11])
+        nTrials = int(self._dataFilt[12])
         if (nTrials > 0):
             self.lbl_trialnumber.setText("Trial {:d} of {:d}".format(trialNum, nTrials))
         else:
