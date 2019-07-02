@@ -943,6 +943,14 @@ class MainWindow(QMainWindow):
         else:
             self.lbl_dampingval.setText("")
 
+        # Update trial numbers label
+        trialNum = self._dataFilt[11]
+        nTrials = self._dataFilt[12]
+        if (nTrials > 0)
+            self.lbl_trialnumber.setText("Trial {} of {}".format(trialNum, nTrials))
+        else
+            self.lbl_trialnumber.setText("")
+
     def SetPlotBorders(self):
         try:
             # Convert gui input to class data
