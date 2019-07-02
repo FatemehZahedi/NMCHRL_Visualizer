@@ -946,9 +946,9 @@ class MainWindow(QMainWindow):
         # Update trial numbers label
         trialNum = self._dataFilt[11]
         nTrials = self._dataFilt[12]
-        if (nTrials > 0)
-            self.lbl_trialnumber.setText("Trial {} of {}".format(trialNum, nTrials))
-        else
+        if (nTrials > 0):
+            self.lbl_trialnumber.setText("Trial {:d} of {:d}".format(trialNum, nTrials))
+        else:
             self.lbl_trialnumber.setText("")
 
     def SetPlotBorders(self):
